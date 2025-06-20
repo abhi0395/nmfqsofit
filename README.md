@@ -1,6 +1,7 @@
-# nmfqsofit
+nmfqsofit
+============
 
-NMF fitting for QSOs using astropy and scikit-learn.
+**Automated Continuum Fitting for Low-Resolution Quasar Spectra Using Nonnegative Matrix Factorization (NMF)**
 
 ## Installation
 
