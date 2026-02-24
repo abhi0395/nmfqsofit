@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from nmfqsofit.nmfqsofit import main
+from nmfqsofit.parallel_main import main
 
 if __name__ == "__main__":
     main()

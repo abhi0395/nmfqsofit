@@ -6,22 +6,22 @@ setup(
     packages=find_packages(),
     install_requires=[
         'numpy',
-        'scikit-learn',
         'astropy',
         'matplotlib',
-        'psutil'
+        'psutil',
+        'NonnegMFPy',
     ],
     entry_points={
         'console_scripts': [
-            'run_nmfqsofit=nmfqsofit.nmfqsofit:main',
+            'nmfqsofit=nmfqsofit.parallel_main:main',
         ],
     },
     author='Abhijeet Anand',
-    author_email='AbhijeetAnand@lbl.gov',
-    description='NMF fitting for QSOs using astropy and scikit-learn',
+    author_email='abhijeetanand2011@gmail.com',
+    description='Nonnegative matrix factorization based continuum fitting for Quasars using vectorized NMF module and NNLS methos',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/yourusername/nmfqsofit',
+    url='https://github.com/abhi0395/nmfqsofit',
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
