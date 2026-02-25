@@ -126,7 +126,7 @@ def main():
         verbose=True,
     )
 
-    z = np.asarray(spec.metadata["Z"], dtype=float)
+    z = np.asarray(spec.metadata["Z"], dtype=float).reshape(-1)
     if z.shape[0] != n_selected:
         raise ValueError(
             f"Metadata redshift length mismatch: len(Z)={z.shape[0]} "
