@@ -1,0 +1,8 @@
+numpy
+scipy
+astropy
+matplotlib
+psutil
+tqdm
+NonnegMFPy
+pytest
