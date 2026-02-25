@@ -423,7 +423,7 @@ def run_parallel_continuum(
     n_jobs = int(max(1, n_jobs))
 
     tasks = [
-        (wave, flux[i], ivar[i], float(z[i]), eigenspectra, kernel_size, method, maxiters)
+        (wave, flux[i], ivar[i], float(z[i].item()), eigenspectra, kernel_size, method, maxiters)
         for i in range(nqso)
     ]
 
