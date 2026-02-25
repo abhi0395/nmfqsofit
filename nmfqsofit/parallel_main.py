@@ -2,47 +2,13 @@
 
 import argparse
 import multiprocessing as mp
-from typing import Dict, Any
 
 import numpy as np
 from astropy.io import fits  # kept if you want FITS-related exceptions / checks
 
 from .io import QSOSpecRead, load_all_eigenspectra, write_continuum
 from .nmfcontinuum import run_parallel_continuum
-from .utils import read_nqso_from_header, parse_qso_sequence, get_package_versions
-
-
-def _parse_headers(header_items):
-    """
-    Parse KEY=VALUE header arguments into a dict.
-
-    Args:
-        header_items (list[str] or None):
-            List of strings like ["KEY=VALUE", "KEY2=VALUE2"].
-
-    Returns:
-        dict:
-            Dictionary of parsed header keywords and values.
-
-    Raises:
-        ValueError:
-            If any entry does not contain exactly one '='.
-    """
-    headers: Dict[str, Any] = {}
-    if not header_items:
-        return headers
-
-    for item in header_items:
-        if item.count("=") != 1:
-            raise ValueError(f"Invalid header '{item}'. Expected format KEY=VALUE.")
-        key, value = item.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-        if not key:
-            raise ValueError(f"Invalid header '{item}'. KEY cannot be empty.")
-        headers[key] = value
-    return headers
-
+from .utils import read_nqso_from_header, parse_qso_sequence, _parse_headers
 
 def main():
     """
@@ -193,15 +159,7 @@ def main():
     )
 
     # Parsing user defined headers
-    headers = _parse_headers(args.headers)
-    headers["METHOD"] = str(args.method)
-    headers["EIGSPEC"] = str(args.eigenspectra)
-    headers["KERSIZE"] = int(args.kernel_size)
-    headers["MAXITER"] = (int(args.maxiters) if args.maxiters is not None else -1)
-    package_versions = get_package_versions()
-    for k, (pkg, ver) in enumerate(package_versions.items()):
-        headers[f"DEPNAM{k:02d}"] = str(pkg)
-        headers[f"DEPVER{k:02d}"] = str(ver)
+    headers = _parse_headers(args)
 
     # Write output
     write_continuum(

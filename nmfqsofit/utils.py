@@ -7,6 +7,7 @@ import time
 import re
 from matplotlib.ticker import AutoMinorLocator
 from astropy.io import fits
+from typing import Dict, Any
 
 def elapsed(start, msg):
     """
@@ -203,20 +204,62 @@ def linear_interpolation(xnew, xold, yold):
     """
     return np.interp(xnew, xold, yold, left=np.nan, right=np.nan)
 
-def get_package_versions():
+
+def _parse_headers(args):
     """
-    Get the versions of qsoabsfind and other relevant packages.
+    Parse KEY=VALUE header arguments into a dict.
+
+    Args:
+        args (list[str] or None):
+            List of strings like ["KEY=VALUE", "KEY2=VALUE2"].
 
     Returns:
-        dict: A dictionary containing the versions of the packages.
+        dict:
+            Dictionary of parsed header keywords and values.
+
+    Raises:
+        ValueError:
+            If any entry does not contain exactly one '='.
     """
+
     from importlib.metadata import version, PackageNotFoundError
+    import sys
+    from . import __author__, __repo__  # Import from your __init__.py
+
+    headers: Dict[str, Any] = {}
+    # Always set these keywords in the Primary Header
+    headers['ORIGAUTH'] = (__author__, 'Original author of repo')
+    headers['GITREPO'] = (__repo__, 'Source code repository')
+
+    for item in args.headers:
+        if item.count("=") != 1:
+            raise ValueError(f"Invalid header '{item}'. Expected format KEY=VALUE.")
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            raise ValueError(f"Invalid header '{item}'. KEY cannot be empty.")
+        headers[key] = value
 
     packages = ['python','nmfqsofit', 'numpy', 'astropy', 'scipy', 'NonnegMFPy', 'tqdm', 'pytest']
     versions = {}
     for pkg in packages:
-        try:
-            versions[pkg] = version(pkg)
-        except PackageNotFoundError:
-            versions[pkg] = 'not installed'
-    return versions
+        if pkg=='python':
+            versions[pkg] = sys.version.split()[0]
+        else:
+            try:
+                versions[pkg] = version(pkg)
+            except PackageNotFoundError:
+                versions[pkg] = 'not installed'
+
+    headers["METHOD"] = str(args.method)
+    headers["EIGSPEC"] = str(args.eigenspectra)
+    headers["KERSIZE"] = int(args.kernel_size)
+    headers["MAXITER"] = (int(args.maxiters) if args.maxiters is not None else -1)
+    for k, (pkg, ver) in enumerate(versions.items()):
+        headers[f"DEPNAM{k:02d}"] = str(pkg)
+        headers[f"DEPVER{k:02d}"] = str(ver)
+
+    return headers
+
+

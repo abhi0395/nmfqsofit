@@ -60,7 +60,7 @@ pip install numpy scipy astropy matplotlib psutil pytest NonnegMFPy tqdm
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/nmfqsofit.git
+git clone https://github.com/abhi0395/nmfqsofit.git
 cd nmfqsofit
 
 # Install a tagged version (stable and reproducible). Replace vX.Y.Z with the desired Git tag (for example v2.0.1).
