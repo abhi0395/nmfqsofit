@@ -17,21 +17,26 @@ nmfqsofit
 
 ## Features
 
-- NMF-based quasar continuum modeling  
-- Alternatively, NNLS-based fitting method  
-- Multiple redshift-dependent eigenspectra support  
-- Automatic best-eigenset selection via minimum cost  
-- Efficient parallel processing (multiprocessing)  
-- Clean FITS I/O structure  
-- Modular and extensible design  
-- Unittest included 
+- **NMF-based quasar continuum modeling** – Fits coefficients using Non-negative Matrix Factorization  
+- **NNLS alternative** – Optionally use Non-Negative Least Squares for coefficient fitting  
+- **Spectrum normalization & scaling** – Fits the normalized spectrum and automatically scales the continuum back to the observed frame  
+- **Flexible eigenvector interpolation** – Interpolates NMF eigenvectors to observed frame using user-provided interpolation kind (e.g., 'linear', 'cubic', 'nearest')  
+- **Multiple redshift-dependent eigenspectra support** – Handles multiple redshift bins with automatic selection based on quasar redshift  
+- **Automatic best-eigenset selection** – Selects the eigenset with minimum cost when multiple bins are valid  
+- **Median filtering flexibility** – Performs smoothing on continuum model iteratively to get the best chi2 value  
+- **Comprehensive logging framework** – Structured logging with python log levels for observability  
+- **Efficient parallel processing** – Multiprocessing-based batch fitting optimized for HPC environments  
+- **Flexible eigenspectra loading** – Load from single FITS files or entire directories  
+- **Clean FITS I/O** – Well-structured input/output with validated HDU structure  
+- **Modular and extensible design** – Clear separation of concerns for easy extension  
+- **Unit tests included** – pytest-based test suite with integration tests 
 
 ---
 
 ## Designed For
 
-- Large spectroscopic surveys (SDSS, DESI, 4MOST, WEAVE, etc.)
-- HPC continuum fitting  
+- Large spectroscopic surveys (SDSS, DESI, 4MOST, WEAVE, WAVES, HST etc.)
+- Local system or HPC continuum fitting  
  
 ----
 
@@ -75,15 +80,13 @@ pip install -e .
 ```bash
 python -m unittest discover -s tests
 nmfqsofit --help
-python -c "import qsoabsfind; print(qsoabsfind.__version__)"
-python -c "from qsoabsfind.parallel_convolution import parallel_convolution_method_absorber_finder_QSO_spectra; print('Installation successful!')"
 ```
 
 ---
 
 ## NMF Eigenspectra (Necessary before you run the script)
 
-The NMF eigenspectra are maintained in a separate [repository](https://github.com/abhi0395/nmfeigenspectra). This keeps the eigenspectra data independent from the `nmfqsofit` codebase, allowing both to evolve separately. Currently, the repository provides eigenspectra built from **SDSS DR14** quasar spectra only. In the future, eigenspectra from additional surveys (e.g., DESI DR1/DR2, 4MOST, WEAVE) will be added.
+The NMF eigenspectra are maintained in a separate [repository](https://github.com/abhi0395/nmfeigenspectra). This keeps the eigenspectra data independent from the `nmfqsofit` codebase, allowing both to evolve separately. Currently, the repository provides eigenspectra built from **SDSS DR14** and **DESI DR1** quasar spectra only. In the future, eigenspectra from additional surveys (e.g., 4MOST, WEAVE, HST, WAVES) will be added.
 
 Before running `nmfqsofit`, download the eigenspectra repository:
 
@@ -92,30 +95,40 @@ git clone https://github.com/abhi0395/nmfeigenspectra.git
 
 ### For SDSS DR14 eigenspectra, use the sdss/ directory:
 /path/to/nmfeigenspectra/sdss/
+
+### For DESI DR1 eigenspectra, use the desi/ directory:
+/path/to/nmfeigenspectra/desi/
 ```
 
-Files follow the naming convention:
+### Eigenspectra Loading
 
-```
-DR14_QSO_NMF_zQSO_000_100_basis.fits
-```
+The `--eigenspectra` argument can point to either:
+- A **directory** containing multiple eigenspectra FITS files – automatically loads all files matching the naming pattern
+- A **single FITS file** – loads eigenspectra directly from that file
 
 The pipeline automatically:
 - Selects appropriate eigenspectra based on quasar redshift  
 - Fits using all matching redshift bins  
-- Chooses the solution with minimum cost  
+- Use either NMF or NNLS method to find continuum coefficients
+- Performs efficient smoothing to improve chi2
+- Chooses the solution with minimum cost (i.e. reduced chi2) 
+- Logs detailed information about loaded eigenspectra (redshift bins, wavelength ranges, number of components)
 ---
 
 ##  How It Works
 
-1. Load quasar spectra (FLUX, IVAR, WAVELENGTH, METADATA with Z).
-2. Load all available eigenspectra from directory.
-3. For each quasar:
-   - Identify matching redshift bins.
-   - Fit continuum using NNLS or NMF.
-   - If multiple bins valid it will select solution with minimum cost.
-4. Apply median filtering correction.
-5. Save coefficients, continua, and fit statistics to FITS.
+1. **Load quasar spectra** – Reads FLUX, IVAR, WAVELENGTH, and METADATA (with redshift Z) from FITS files.
+2. **Load eigenspectra** – Loads NMF eigenspectra from a directory or single file. Eigenspectra are organized by redshift bins and wavelength ranges.
+3. **For each quasar**:
+   - **Identify matching redshift bins** – Selects eigenspectra with redshift bins encompassing the quasar's redshift.
+   - **Normalize spectrum** – Normalizes the observed spectrum to a reference continuum level.
+   - **Interpolate eigenvectors** – Interpolates eigenspectra from eigenspectra wavelength grid to observed wavelength grid using user-specified interpolation kind (linear, cubic, etc.).
+   - **Fit coefficients** – Solves for NMF/NNLS coefficients on the normalized spectrum using scipy.optimize.nnls or NonnegMFPy.
+   - **Scale back to observed frame** – Reconstructs the continuum in observed frame using the fitted coefficients and interpolated eigenvectors.
+   - **Select best eigenset** – If multiple redshift bins are valid, automatically selects the eigenset with minimum chi2 cost.
+4. **Apply median filtering correction** – Applies median-filter smoothing correction in the observed frame to remove intermediate and small scale continuum fluctuations.
+5. **Save results** – Writes coefficients, continuum, fit statistics, and metadata to output FITS file.
+6. **Comprehensive logging** – All operations are logged with timestamps, function names, and line numbers for debugging and monitoring.
 
 ---
 
@@ -129,17 +142,28 @@ nmfqsofit \
   --eigenspectra /path/to/nmfeigenspectra/sdss \
   --kernel-size 71 \
   --method nnls \
+  --interp-kind linear \
   --ncpus 8 \
-  --output continuum_output.fits
-  --headers AUTHOR=Abhijeet SURVEY=DESI VERSION=1.0
+  --output continuum_output.fits \
+  --headers AUTHOR=Abhijeet SURVEY=DESI VERSION=1.0 \
   --n-qso 100
 ```
 
-### Using NMF (or nnls) Method. Just replace *nmf* to *nnls*
+### Options
 
-```bash
---method nmf
-```
+- `--spectra-file`: Input FITS file with FLUX, IVAR, WAVELENGTH, and METADATA (with Z column)
+- `--eigenspectra`: Directory or single FITS file containing NMF eigenspectra
+- `--kernel-size`: Median filter kernel size for smoothing correction (default: 71)
+- `--method`: Fitting method – `nnls` (Non-Negative Least Squares) or `nmf` (Non-negative Matrix Factorization; default: `nnls`)
+- `--interp-kind`: Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.; default: `linear`)
+- `--ncpus`: Number of CPU processes for parallel fitting (default: 8)
+- `--maxiters`: Maximum iterations for NMF solver (default: 200)
+- `--n-qso`: Number of QSOs to process – can be an integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`)
+- `--output`: Output FITS filename
+- `--headers`: Optional FITS header keywords (e.g., `AUTHOR=Name SURVEY=Mission`)
+
+### Using NMF (instead of NNLS)
+Replace `--method nnls` with `--method nmf`.
 
 Output FITS Structure
 ------------
@@ -150,9 +174,9 @@ The output FITS file contains:
 |------|------------|
 | Primary | Header only |
 | COEFFICIENTS | NMF coefficients (nspec × ncomp) |
-| FIRST_CONTINUUM | Initial reconstructed continuum |
+| FIRST_CONTINUUM | First reconstructed continuum (before median filtering) |
 | CONTINUUM | Final median-filter corrected continuum |
-| METADATA | FIRST_COST, FINAL_COST, EIGVECTOR_TYPE |
+| METADATA | Z, FIRST_COST, FINAL_COST, EIGVECTOR_RANGE, ZMIN, ZMAX, NORM_FACTOR, N_COMP |
 
 ---
 
@@ -160,12 +184,19 @@ Plotting Example
 ------------
 
 ```python
+from nmfqsofit.io import QSOSpecRead, ContinuumSpec
 from nmfqsofit.utils import plot_flux_and_continuum
 
+spec  = QSOSpecRead(spectra_file, autoload=True) # read spectra 
+nmfmodel  = ContinuumSpec(continuum_file, autoload=True) # read continuum data
+
+# To see continuum metadata:
+nmfmodel.metadata
+
 plot_flux_and_continuum(
-    wave,
-    flux,
-    continuum,
+    spec.wave,
+    spec.flux[0,:],
+    nmfmodel.continuum[0,:],
     flux_kwargs={"color": "black"},
     continuum_kwargs={"color": "red", "lw": 2}
 )
@@ -178,9 +209,9 @@ Citations
 
 If you use this code, please cite:
 
-- [Anand et al. 2025](https://arxiv.org/abs/2103.15842), DESI DR1 and DR2 continuum
+- [Anand et al. 2025](https://arxiv.org/abs/2504.20299), Description of **nmfqsofit** and DESI DR1 continuum
 - [Anand et al. 2021](https://arxiv.org/abs/2103.15842), SDSS DR14 Eigenspectra
-- [Zhu 2016](https://arxiv.org/abs/1612.06037), NMF implementation
+- [Zhu 2016](https://arxiv.org/abs/1612.06037), Vectorized NMF implementation
 
 ---
 

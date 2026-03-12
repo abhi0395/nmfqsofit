@@ -2,7 +2,6 @@
 
 import unittest
 import tempfile
-import os
 from pathlib import Path
 import subprocess
 
@@ -89,35 +88,33 @@ class TestNMFContinuum(unittest.TestCase):
             ivar=spec.ivar,
             z=z,
             eigenspectra=eigenspectra,
-            kernel_size=71,
+            kernel_large=141,
+            kernel_small=71,
             method="nmf",
             n_jobs=1,
         )
 
-        (
-            coeff_mat,
-            first_cont_mat,
-            cont_mat,
-            first_cost,
-            cost,
-            eigvec_range,
-        ) = out
-
         # Basic shape checks (main goal: ensure nothing is broken)
-        self.assertEqual(coeff_mat.shape[0], n_take)
-        self.assertEqual(first_cont_mat.shape, spec.flux.shape)
-        self.assertEqual(cont_mat.shape, spec.flux.shape)
-        self.assertEqual(first_cost.shape, (n_take,))
-        self.assertEqual(cost.shape, (n_take,))
-        self.assertEqual(eigvec_range.shape, (n_take,))
+        self.assertEqual(out["coefficients"].shape[0], n_take)
+        self.assertEqual(out["first_continuum"].shape, spec.flux.shape)
+        self.assertEqual(out["continuum"].shape, spec.flux.shape)
+        self.assertEqual(out["first_cost"].shape, (n_take,))
+        self.assertEqual(out["final_cost"].shape, (n_take,))
+        self.assertEqual(out["eigvector_range"].shape, (n_take,))
+        self.assertEqual(out["norm_factor"].shape, (n_take,))
+        # z and related arrays may include an extra singleton dimension; only length is important
+        self.assertEqual(out["z"].shape[0], n_take)
+        self.assertEqual(out["zmin"].shape[0], n_take)
+        self.assertEqual(out["zmax"].shape[0], n_take)
+        self.assertEqual(out["n_comp"].shape[0], n_take)
 
         # Sanity: costs must be finite
-        self.assertTrue(np.all(np.isfinite(first_cost)))
-        self.assertTrue(np.all(np.isfinite(cost)))
+        self.assertTrue(np.all(np.isfinite(out["first_cost"])))
+        self.assertTrue(np.all(np.isfinite(out["final_cost"])))
 
         # Continuum should be finite at least where ivar>0
         good = spec.ivar > 0
-        self.assertTrue(np.all(np.isfinite(cont_mat[good])))
+        self.assertTrue(np.all(np.isfinite(out["continuum"][good])))
 
     def test_nnls_end_to_end_fit_runs(self):
         # Read a small number of QSOs (using NNLS)
@@ -143,36 +140,33 @@ class TestNMFContinuum(unittest.TestCase):
             ivar=spec.ivar,
             z=z,
             eigenspectra=eigenspectra,
-            kernel_size=71,
+            kernel_large=141,
+            kernel_small=71,
             method="nnls",
             n_jobs=1,
         )
 
-        (
-            coeff_mat,
-            first_cont_mat,
-            cont_mat,
-            first_cost,
-            cost,
-            eigvec_range,
-        ) = out
-
         # Basic shape checks (main goal: ensure nothing is broken)
-        self.assertEqual(coeff_mat.shape[0], n_take)
-        self.assertEqual(first_cont_mat.shape, spec.flux.shape)
-        self.assertEqual(cont_mat.shape, spec.flux.shape)
-        self.assertEqual(first_cost.shape, (n_take,))
-        self.assertEqual(cost.shape, (n_take,))
-        self.assertEqual(eigvec_range.shape, (n_take,))
+        self.assertEqual(out["coefficients"].shape[0], n_take)
+        self.assertEqual(out["first_continuum"].shape, spec.flux.shape)
+        self.assertEqual(out["continuum"].shape, spec.flux.shape)
+        self.assertEqual(out["first_cost"].shape, (n_take,))
+        self.assertEqual(out["final_cost"].shape, (n_take,))
+        self.assertEqual(out["eigvector_range"].shape, (n_take,))
+        self.assertEqual(out["norm_factor"].shape, (n_take,))
+        # account for possible singleton trailing dimension on z
+        self.assertEqual(out["z"].shape[0], n_take)
+        self.assertEqual(out["zmin"].shape[0], n_take)
+        self.assertEqual(out["zmax"].shape[0], n_take)
+        self.assertEqual(out["n_comp"].shape[0], n_take)
 
         # Sanity: costs must be finite
-        self.assertTrue(np.all(np.isfinite(first_cost)))
-        self.assertTrue(np.all(np.isfinite(cost)))
+        self.assertTrue(np.all(np.isfinite(out["first_cost"])))
+        self.assertTrue(np.all(np.isfinite(out["final_cost"])))
 
         # Continuum should be finite at least where ivar>0
         good = spec.ivar > 0
-        self.assertTrue(np.all(np.isfinite(cont_mat[good])))
-
+        self.assertTrue(np.all(np.isfinite(out["continuum"][good])))
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 # nmfqsofit/utils.py
 
 import numpy as np
+from scipy.interpolate import interp1d
 import os
 import matplotlib.pyplot as plt
 import time
@@ -9,20 +10,29 @@ from matplotlib.ticker import AutoMinorLocator
 from astropy.io import fits
 from typing import Dict, Any
 
-def elapsed(start, msg):
+from .logger import get_logger
+
+logger = get_logger(__name__)
+
+def elapsed(start, msg, use_logger=False):
     """
-    Prints the elapsed time since `start`.
+    Prints or logs the elapsed time since `start`.
 
     Args:
         start (float): The start time.
-        msg (str): The message to print with the elapsed time.
+        msg (str): The message to print/log with the elapsed time.
+        use_logger (bool): If True, use logger instead of print (default: False).
 
     Returns:
         float: The current time.
     """
     end = time.time()
     if start is not None:
-        print(f"{msg} {end - start:.2f} seconds")
+        elapsed_msg = f"{msg} {end - start:.2f} seconds"
+        if use_logger:
+            logger.info(elapsed_msg)
+        else:
+            print(elapsed_msg)
     return end
 
 
@@ -179,30 +189,44 @@ def plot_flux_and_continuum(
         return ax
 
 
-def linear_interpolation(xnew, xold, yold):
+def interpolation1D(xnew, xold, yold, kind='linear', fill_value=np.nan):
     """
-    Perform 1D linear interpolation.
+    Perform 1D interpolation.
 
     Interpolates `yold` defined at coordinates `xold` onto new coordinates
-    `xnew` using linear interpolation. Values outside the interpolation
+    `xnew` using specified interpolation method. Values outside the interpolation
     range are set to NaN.
 
     Args:
         xnew (numpy.ndarray):
             New x-coordinates where interpolation is evaluated.
-
         xold (numpy.ndarray):
             Original x-coordinates of the data. Must be monotonically increasing.
-
         yold (numpy.ndarray):
             Original y-values corresponding to `xold`.
+        kind (str):
+            Interpolation method (default: 'linear'). Use 'linear' for linear interpolation.
+        fill_value (float):
+            Value to use for points outside the interpolation range (default: np.nan).
 
     Returns:
         numpy.ndarray:
             Interpolated values evaluated at `xnew`. Points outside the
-            range of `xold` are assigned NaN.
+            range of `xold` are assigned `fill_value`.
     """
-    return np.interp(xnew, xold, yold, left=np.nan, right=np.nan)
+
+    if kind == "linear":
+        return np.interp(xnew, xold, yold, left=fill_value, right=fill_value)
+    else:
+        f = interp1d(
+            xold,
+            yold,
+            kind=kind,
+            bounds_error=False,
+            fill_value=fill_value,
+            assume_sorted=True,
+        )
+        return f(xnew)
 
 
 def _parse_headers(args):
@@ -210,12 +234,17 @@ def _parse_headers(args):
     Parse KEY=VALUE header arguments into a dict.
 
     Args:
-        args (list[str] or None):
-            List of strings like ["KEY=VALUE", "KEY2=VALUE2"].
+        args (argparse.Namespace):
+            Parsed command-line arguments containing:
+            - headers (list[str]): List of strings like ["KEY=VALUE", "KEY2=VALUE2"].
+            - method (str): Fitting method.
+            - eigenspectra (str): Eigenspectra directory.
+            - kernel_size (int): Kernel size.
+            - maxiters (int): Maximum iterations.
 
     Returns:
         dict:
-            Dictionary of parsed header keywords and values.
+            Dictionary of parsed header keywords and values, including package versions.
 
     Raises:
         ValueError:
@@ -252,10 +281,11 @@ def _parse_headers(args):
             except PackageNotFoundError:
                 versions[pkg] = 'not installed'
 
-    headers["METHOD"] = str(args.method)
-    headers["EIGSPEC"] = str(args.eigenspectra)
-    headers["KERSIZE"] = int(args.kernel_size)
-    headers["MAXITER"] = (int(args.maxiters) if args.maxiters is not None else -1)
+    headers["METHOD"] = (str(args.method) , 'Fitting Method')
+    headers["EIGSPEC"] = (str(args.eigenspectra) , 'Eigenvector directory')
+    headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing intermediate fluctuation')
+    headers["KERN_II"] = (int(args.kernel_small), 'kernel size for removing small fluctuation')
+    headers["MAXITER"] = ((int(args.maxiters) if args.maxiters is not None else -1), 'Maximum iteration for fitting')
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)
         headers[f"DEPVER{k:02d}"] = str(ver)

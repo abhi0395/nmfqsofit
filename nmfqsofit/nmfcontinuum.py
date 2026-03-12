@@ -1,4 +1,4 @@
-# nmfqsofit/nmfqsofit.py
+# nmfqsofit/nmfcontinuum.py
 
 from __future__ import annotations
 
@@ -6,19 +6,20 @@ import time
 from tqdm import tqdm
 import multiprocessing as mp
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Tuple, Any
 
 import numpy as np
-from astropy.io import fits
 from scipy.optimize import nnls
 from scipy.signal import medfilt
 
 # Zhu 2016 based vectorized NMF (if you use it)
 from NonnegMFPy import nmf
 
-from .utils import linear_interpolation, parse_qso_sequence
-from .io import QSOSpecRead, load_all_eigenspectra, write_continuum
+from .utils import interpolation1D
+from .logger import get_logger
+
+logger = get_logger(__name__)
+LARGE_CHI2 = 999999.0
 
 @dataclass(frozen=True)
 class Eigenset:
@@ -27,27 +28,86 @@ class Eigenset:
     eigvec: np.ndarray             # (ncomp, n_rest_wave)
 
 
+def compute_normalization(
+    wave: np.ndarray,
+    flux: np.ndarray,
+    ivar: np.ndarray,
+    lam_min_obs: float,
+    lam_max_obs: float,
+    stat: str = "median",
+) -> float:
+    """
+    Compute normalization factor in an observed-frame wavelength window.
+
+    Normalization is computed using only valid pixels:
+      finite(flux), finite(ivar), ivar > 0, and lam_min_obs < wave < lam_max_obs.
+
+    Args:
+        wave (np.ndarray): Observed wavelength grid (nwave,).
+        flux (np.ndarray): Observed flux array (nwave,).
+        ivar (np.ndarray): Observed inverse variance array (nwave,).
+        lam_min_obs (float): Observed-frame lower bound of normalization window (Angstrom).
+        lam_max_obs (float): Observed-frame upper bound of normalization window (Angstrom).
+        stat (str): "median" or "mean".
+
+    Returns:
+        float: Normalization factor. If insufficient valid pixels, returns np.nan.
+    """
+    wave = np.asarray(wave)
+    flux = np.asarray(flux)
+    ivar = np.asarray(ivar)
+
+    sel = (
+        (wave > lam_min_obs)
+        & (wave < lam_max_obs)
+        & np.isfinite(flux)
+        & np.isfinite(ivar)
+        & (ivar > 0.0)
+    )
+
+    if int(np.count_nonzero(sel)) < 5:
+        return np.nan
+
+    if stat == "median":
+        return float(np.nanmedian(flux[sel]))
+    elif stat == "mean":
+        return float(np.nanmean(flux[sel]))
+    else:
+        raise ValueError("stat must be 'median' or 'mean'")
+
+
 class NMFContinuum:
     """
     Fit a quasar continuum using fixed NMF eigenspectra and non-negative coefficients.
 
-    The workflow is:
-      1) Choose the appropriate eigenset(s) based on QSO redshift z.
-         If bins overlap, fit all matching eigensets and keep the lowest final cost.
-      2) Interpolate rest-frame eigenspectra to the observed wavelength grid.
-      3) Solve for non-negative coefficients using either:
-         - Weighted NNLS
-         - NonnegMFPy with H-only solve
-      4) Apply a median-filter correction on flux/continuum ratio for smooth calibration.
+    IMPORTANT (Normalization-aware fitting):
+      - Eigenspectra are assumed to be trained on normalized spectra.
+      - For each candidate eigenset (zmin,zmax,lam_min,lam_max,stat), we:
+          (1) normalize the observed spectrum using that window/stat
+          (2) fit coefficients in normalized space
+          (3) scale the fitted continuum back to observed flux units
+          (4) compute chi^2 costs against the observed spectrum
+      - If multiple bins overlap in z, we try all and keep the lowest final cost.
 
     Attributes:
         wave (np.ndarray): Observed-frame wavelength grid (nwave,).
         flux (np.ndarray): Observed flux (nwave,).
-        ivar (np.ndarray): Inverse variance (nwave,).
+        ivar (np.ndarray): Observed inverse variance (nwave,).
         z (float): Quasar redshift.
-        kernel_size (int): Median filter kernel size (must be odd; will be enforced).
+        eigenspectra_dict (dict): keys are (zmin,zmax,lam_min,lam_max,stat).
+        kernel_large (int): Median filter kernel size (odd; enforced).
         method (str): 'nnls' or 'nmf'.
-        eigenspectra_dict (dict): {(zmin, zmax): Eigenset or {"wave":..., "eigvec":...}}.
+        maxiters (int): Maximum iterations for solver (None means default).
+        interp_kind (str): Interpolation method for eigenspectra ('linear' or 'nearest'; default: 'linear').
+
+    Outputs:
+        coeff (np.ndarray): best-fit coefficients (ncomp,).
+        first_continuum (np.ndarray): first-pass continuum in observed units (nwave,).
+        continuum (np.ndarray): final continuum in observed units (nwave,).
+        first_cost (float): reduced chi^2 for first_continuum against observed spectrum.
+        cost (float): reduced chi^2 for continuum against observed spectrum.
+        eigvec_range (str): "z_{zmin:.2f}_{zmax:.2f}"
+        norm (float): normalization factor used for the best-fit eigenset.
     """
 
     def __init__(
@@ -56,26 +116,44 @@ class NMFContinuum:
         flux: np.ndarray,
         ivar: np.ndarray,
         z: float,
-        eigenspectra: Dict[Tuple[float, float], Any],
-        kernel_size: int = 71,
-        method: str = "nnls",
-        maxiters: int = None,
+        eigenspectra: Dict[Tuple[float, float, float, float, str], Any],
+        kernel_large: int,
+        kernel_small: int,
+        method: str,
+        maxiters: int,
+        interp_kind: str
     ):
+        """
+        Initialize NMFContinuum fitter.
+
+        Args:
+            wave (np.ndarray): Observed-frame wavelength grid (nwave,).
+            flux (np.ndarray): Observed flux array (nwave,).
+            ivar (np.ndarray): Observed inverse variance array (nwave,).
+            z (float): Quasar redshift.
+            eigenspectra (dict): Eigenspectra dictionary with keys (zmin, zmax, lam_min, lam_max, stat).
+            kernel_large (int): Median filter kernel size (odd; default: 71).
+            method (str): 'nnls' or 'nmf' (default: 'nnls').
+            maxiters (int, optional): Maximum iterations for solver (default: None).
+        """
         self.wave = np.asarray(wave)
         self.flux = np.asarray(flux)
         self.ivar = np.asarray(ivar)
         self.z = float(z)
         self.maxiters = maxiters
+        self.interp_kind = interp_kind
 
-        self.delta_lambda = np.nanmedian(self.wave[1:]-self.wave[:-1])
+        self.delta_lambda = np.nanmedian(self.wave[1:] - self.wave[:-1])
 
-        if kernel_size is not None:
-            # kernel size for medfilt must be odd
-            kernel_size = int(kernel_size)
-            if (kernel_size % 2 == 0) or (kernel_size < 3):
-                raise ValueError("kernel size must be odd and > 3")
+        if kernel_large is not None and kernel_large > 0:
+            kernel_large = int(kernel_large)
+            if (kernel_large % 2 == 0) or (kernel_large < 1) or (kernel_small < 1):
+                raise ValueError("kernel size must be odd and >= 1")
+        else:
+            logger.info("Kernel size is negative or None, so no smoothing will be done")
 
-        self.kernel_size = kernel_size
+        self.kernel_large = kernel_large
+        self.kernel_small = kernel_small
 
         if method not in {"nnls", "nmf"}:
             raise ValueError("method must be either 'nnls' or 'nmf'")
@@ -84,22 +162,23 @@ class NMFContinuum:
         self.eigenspectra_dict = eigenspectra
 
         # Outputs
-        self.coeff =  None            # (ncomp,)
-        self.first_continuum = None  # (nwave,)
-        self.continuum = None        # (nwave,)
+        self.coeff = None             # (ncomp,)
+        self.first_continuum = None   # (nwave,)
+        self.continuum = None         # (nwave,)
         self.first_cost = None
         self.cost = None
         self.eigvec_range = None
+        self.norm = None
 
-        # Mask array from ivar
+        # Mask array from observed ivar (DESI-friendly)
         self.mask = np.isfinite(self.flux) & np.isfinite(self.ivar) & (self.ivar > 0)
 
-    def _keys_as_arrays(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _keys_as_arrays(self):
         """
-        Return zmin and zmax arrays from eigenspectra_dict keys.
+        Return arrays of zmin, zmax, lam_min, lam_max, stat from eigenspectra_dict keys.
 
         Returns:
-            (np.ndarray, np.ndarray): zmins, zmaxs each shape (nbins,).
+            tuple of arrays: zmins, zmaxs, lam_mins, lam_maxs, stats
         """
         keys = list(self.eigenspectra_dict.keys())
         if len(keys) == 0:
@@ -107,7 +186,10 @@ class NMFContinuum:
 
         zmins = np.array([float(k[0]) for k in keys], dtype=float)
         zmaxs = np.array([float(k[1]) for k in keys], dtype=float)
-        return zmins, zmaxs
+        lam_mins = np.array([float(k[2]) for k in keys], dtype=float)
+        lam_maxs = np.array([float(k[3]) for k in keys], dtype=float)
+        stats = np.array([str(k[4]) for k in keys], dtype=object)
+        return zmins, zmaxs, lam_mins, lam_maxs, stats
 
     def _matching_bins(self) -> np.ndarray:
         """
@@ -116,37 +198,35 @@ class NMFContinuum:
         Uses [zmin, zmax) convention.
 
         Returns:
-            np.ndarray: indices into zmins/zmaxs arrays.
+            np.ndarray: indices into key arrays.
         """
-        zmins, zmaxs = self._keys_as_arrays()
+        zmins, zmaxs, _, _, _ = self._keys_as_arrays()
         return np.where((self.z >= zmins) & (self.z < zmaxs))[0]
 
-    def _get_eigenset_by_index(self, idx: int) -> Tuple[float, float, Eigenset]:
+    def _get_eigenset_by_index(self, idx: int):
         """
-        Get (zmin, zmax, eigenset) for a given matching index.
+        Get (zmin, zmax, lam_min, lam_max, stat, eigenset) for a given matching index.
+
+        Args:
+            idx (int): Index into the eigenspectra dictionary.
 
         Returns:
-            (float, float, Eigenset)
+            tuple: (zmin, zmax, lam_min, lam_max, stat, eigenset)
         """
-        zmins, zmaxs = self._keys_as_arrays()
-        zmin = float(zmins[idx])
-        zmax = float(zmaxs[idx])
+        keys = list(self.eigenspectra_dict.keys())
+        key = keys[idx]
+        zmin, zmax, lam_min, lam_max, stat = key
 
-        item = self.eigenspectra_dict[(zmin, zmax)]
+        item = self.eigenspectra_dict[key]
 
         if isinstance(item, Eigenset):
             eig = item
         else:
-            # Or {"wave": rest_wave, "eigvec": eigvec}
             rest_wave = np.asarray(item["wave"])
             eigvec = np.asarray(item["eigvec"])
             eig = Eigenset(rest_wave=rest_wave, eigvec=eigvec)
 
-        return zmin, zmax, eig
-
-    # -------------------------
-    # Main functions to run the continuum fitting
-    # -------------------------
+        return float(zmin), float(zmax), float(lam_min), float(lam_max), str(stat), eig
 
     def _interpolate_eigvec_to_observed(self, eig: Eigenset) -> np.ndarray:
         """
@@ -157,7 +237,7 @@ class NMFContinuum:
             f_lambda(obs) = f_lambda(rest) / (1 + z)   (simple flux-density scaling)
 
         Args:
-            eig (Eigenset): Rest-frame wavelength and eigvec for one bin.
+            eig (Eigenset): Eigenset container with rest_wave and eigvec.
 
         Returns:
             np.ndarray: Interpolated eigenspectra (ncomp, nwave_obs).
@@ -172,193 +252,361 @@ class NMFContinuum:
         out = np.empty((ncomp, self.wave.size), dtype=float)
 
         for i in range(ncomp):
-            # Convert basis to observed frame (simple f_lambda scaling)
             obs_flux = eigvec[i, :] / cz
-            out[i, :] = linear_interpolation(self.wave, obs_wave, obs_flux)
+            foo = np.nanmedian(obs_flux)
+            out[i, :] = interpolation1D(self.wave, obs_wave, obs_flux, kind=self.interp_kind, fill_value=foo)
 
         return out
 
-    def _chi2_reduced(self, model: np.ndarray) -> float:
+    def _chi2_reduced_against_observed(self, model_obs: np.ndarray, n_comp: int) -> float:
         """
-        Compute reduced chi^2 using ivar and valid-mask pixels.
+        Reduced chi^2 computed against the observed spectrum using observed ivar/mask.
 
         Args:
-            model (np.ndarray): Model flux (nwave,).
+            model_obs (np.ndarray): Model flux in observed units (nwave,).
 
         Returns:
-            float: Reduced chi^2.
+            float: Reduced chi^2 value.
         """
-        good = self.mask & np.isfinite(model)
-        n = int(np.count_nonzero(good))
+        good = self.mask & np.isfinite(model_obs)
+        n = int(np.count_nonzero(good)) - n_comp
         if n == 0:
             return np.inf
 
-        diff = self.flux[good] - model[good]
+        diff = self.flux[good] - model_obs[good]
         chi2 = np.sum(self.ivar[good] * diff * diff)
         return float(chi2 / n)
 
-    def _fit_coeff_nnls(self, A_interp: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
+    def _fit_coeff_nnls(self, A_interp: np.ndarray, flux_fit: np.ndarray, ivar_fit: np.ndarray, mask_fit: np.ndarray):
         """
-        Fit coefficients with weighted NNLS using scipy.
+        Fit coefficients with weighted NNLS using scipy (on provided flux/ivar/mask).
 
         Args:
-            A_interp (np.ndarray): Interpolated eigvec (ncomp, nwave).
+            A_interp (np.ndarray): Interpolated eigenspectra matrix (ncomp, nwave).
+            flux_fit (np.ndarray): Flux to fit (nwave,).
+            ivar_fit (np.ndarray): Inverse variance (nwave,).
+            mask_fit (np.ndarray): Boolean mask for valid pixels (nwave,).
 
         Returns:
-            (coeff, model, chi2red)
+            tuple: (coeff, model) where coeff is (ncomp,) and model is (nwave,).
         """
-        good = self.mask & np.all(np.isfinite(A_interp), axis=0)
+        good = mask_fit & np.all(np.isfinite(A_interp), axis=0)
         if int(np.count_nonzero(good)) < A_interp.shape[0]:
             raise ValueError("Not enough valid pixels to fit NNLS coefficients.")
 
-        w = np.sqrt(self.ivar[good])                        # (ngood,)
-        A = (A_interp[:, good].T) * w[:, None]              # (ngood, ncomp)
-        b = self.flux[good] * w                             # (ngood,)
+        w = np.sqrt(ivar_fit[good])                       # (ngood,)
+        A = (A_interp[:, good].T) * w[:, None]            # (ngood, ncomp)
+        b = flux_fit[good] * w                            # (ngood,)
 
         coeff, _ = nnls(A, b, maxiter=self.maxiters)
-        model = coeff @ A_interp                             # (nwave,)
-        chi2red = self._chi2_reduced(model)
-        return coeff, model, chi2red
+        model = coeff @ A_interp                           # model in the same space as flux_fit
+        return coeff, model
 
-    def _fit_coeff_nmf(self, A_interp: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
+    def _fit_coeff_nmf(self, A_interp: np.ndarray, flux_fit: np.ndarray, ivar_fit: np.ndarray, mask_fit: np.ndarray):
         """
-        Fit coefficients with NonnegMFPy by solving H only using Zhu 2016.
-        Repo: https://github.com/guangtunbenzhu/NonnegMFPy/blob/master/NonnegMFPy/nmf.py
-
-        Note:
-            This assumes NonnegMFPy expects X with shape (n_pixels, n_spectra).
-            Here we fit a single spectrum -> n_spectra=1.
+        Fit coefficients with NonnegMFPy by solving H only (single spectrum).
 
         Args:
-            A_interp (np.ndarray): Interpolated eigvec (ncomp, nwave).
+            A_interp (np.ndarray): Interpolated eigenspectra matrix (ncomp, nwave).
+            flux_fit (np.ndarray): Flux to fit (nwave,).
+            ivar_fit (np.ndarray): Inverse variance (nwave,).
+            mask_fit (np.ndarray): Boolean mask for valid pixels (nwave,).
+
+        Note:
+            NonnegMFPy expects X with shape (n_pixels, n_spectra).
+            Here n_spectra=1.
 
         Returns:
-            (coeff, model, chi2red)
+            tuple: (coeff, model) where coeff is (ncomp,) and model is (nwave,).
         """
-        good = self.mask & np.all(np.isfinite(A_interp), axis=0)
+        good = mask_fit & np.all(np.isfinite(A_interp), axis=0)
         if int(np.count_nonzero(good)) < A_interp.shape[0]:
             raise ValueError("Not enough valid pixels to fit NMF coefficients.")
 
-        # X, V, M shapes: (n_pixels, 1)
-        X = self.flux[good].reshape(-1, 1)
-        V = self.ivar[good].reshape(-1, 1)
+        X = flux_fit[good].reshape(-1, 1)
+        V = ivar_fit[good].reshape(-1, 1)
         M = np.ones_like(X, dtype=bool)
 
-        # W shape in NonnegMFPy: (n_pixels, n_components)
-        W = A_interp[:, good].T
+        W = A_interp[:, good].T  # (n_pixels, n_components)
 
         solver = nmf.NMF(X=X, V=V, M=M, W=W, n_components=W.shape[1])
         solver.SolveNMF(H_only=True, maxiters=self.maxiters)
 
-        # H is (n_components, n_spectra=1)
         coeff = np.asarray(solver.H).reshape(-1)
         model = coeff @ A_interp
-        chi2red = self._chi2_reduced(model)
-        return coeff, model, chi2red
+        return coeff, model
 
-    def _apply_smooth_correction(self, first_continuum: np.ndarray) -> np.ndarray:
-        """
-        Apply median-filter smooth correction to the first-pass continuum.
+    def _apply_smooth_correction(self, first_continuum, kernel_large, kernel_small, nsigma=1.5, niter=3):
 
-        Uses ratio r = flux / first_continuum, median-filters it, and multiplies:
-            continuum = first_continuum * smooth_residual
+        """Apply iterative median-filter correction to remove intermediate
+        and small scale fluctuations.
+
+        This implements the idea described in Zhu (e.g., Zhu & Ménard 2013/2016):
+        1) Construct the ratio r = flux / first_continuum.
+        2) Smooth r with an intermediate-scale median filter (kernel_large).
+        3) Remove smaller-scale power with an additional median filter (kernel_small).
+        4) Mask pixels likely affected by narrow absorption by keeping only
+            fluctuations within nsigma * sigma of the smoothed ratio.
+        5) Repeat steps (2)-(4) niter times.
+
+        The output is a multiplicative correction applied to the first-pass continuum:
+            continuum_final = first_continuum * smooth_ratio
+
+        Notes:
+        - This correction is performed in observed space (same grid as flux).
+        - The masking uses a robust sigma estimate (MAD) on (r - smooth_ratio).
+        - Pixels with ivar <= 0, non-finite flux/ivar, or non-positive continuum
+            are excluded from the correction.
 
         Args:
+            flux (np.ndarray): Observed flux array (nwave,).
+            ivar (np.ndarray): Observed inverse variance array (nwave,).
             first_continuum (np.ndarray): First-pass continuum (nwave,).
+            kernel_large (int): Median-filter kernel size for intermediate scales.
+                Must be odd.
+            kernel_small (int): Median-filter kernel size for small scales.
+                Must be odd.
+            nsigma (float): Sigma threshold for masking narrow absorption features.
+            niter (int): Number of iterations (Zhu typically uses 3).
 
         Returns:
-            np.ndarray: Final continuum (nwave,).
+            np.ndarray: Final continuum array (nwave,).
         """
-        cont = np.asarray(first_continuum)
-        good = self.mask & np.isfinite(cont) & (cont > 0)
 
-        ratio = np.full_like(cont, np.nan, dtype=float)
-        ratio[good] = self.flux[good] / cont[good]
+        cont0 = np.asarray(first_continuum)
 
-        if self.kernel_size is not None:
-            smooth = medfilt(ratio, kernel_size=self.kernel_size)
-        else:
-            smooth = np.ones(ratio.size)
+        if kernel_large < 0 or kernel_small < 0:
+            kernel_large = None
+            kernel_small = None
 
-        # Where smooth is non-finite, do not modify continuum
-        out = cont.copy()
-        ok = np.isfinite(smooth)
-        out[ok] = cont[ok] * smooth[ok]
-        return out
+        if (kernel_large is not None) and (kernel_large > 0):
+            if kernel_large % 2 == 0:
+                raise ValueError("kernel_large must be odd")
+
+        if (kernel_small is not None) and (kernel_small > 0):
+            if kernel_small % 2 == 0:
+                raise ValueError("kernel_small must be odd")
+
+        # Base validity mask
+        good0 = (
+            np.isfinite(self.flux)
+            & np.isfinite(self.ivar)
+            & (self.ivar > 0.0)
+            & np.isfinite(cont0)
+            & (cont0 > 0.0)
+        )
+
+        # Ratio in observed space
+        ratio = np.full_like(cont0, np.nan, dtype=float)
+        ratio[good0] = self.flux[good0] / cont0[good0]
+
+        good = good0.copy()
+        smooth = np.ones_like(cont0, dtype=float)
+
+        for it in range(int(niter)):
+
+            prev_good = good.copy()
+
+            # Fill invalid points with neutral value to allow medfilt
+            r = ratio.copy()
+            r[~good] = np.nan
+
+            r_fill = r.copy()
+            r_fill[~np.isfinite(r_fill)] = 1.0
+
+            # Intermediate-scale smoothing
+            r1 = medfilt(r_fill, kernel_size=kernel_large)
+            r1[~np.isfinite(r1)] = 1.0
+            r1[r1 <= 0.0] = 1.0
+
+            # Small-scale smoothing on residual ratio
+            r_small = r_fill / r1
+            r2 = medfilt(r_small, kernel_size=kernel_small)
+            r2[~np.isfinite(r2)] = 1.0
+            r2[r2 <= 0.0] = 1.0
+
+            smooth = r1 * r2
+
+            # Robust masking against narrow absorption spikes in ratio space
+            delta = np.full_like(ratio, np.nan, dtype=float)
+            ok = good0 & np.isfinite(ratio) & np.isfinite(smooth) & (smooth > 0)
+            delta[ok] = ratio[ok] / smooth[ok] - 1.0
+
+            # Use MAD sigma for absorber masking
+            #sigma = self._mad_sigma(delta[good])
+            sigma = np.nanstd(delta[good])
+            if (not np.isfinite(sigma)) or (sigma <= 0.0):
+                break
+
+            cut = -nsigma * sigma
+            good = ok & (delta > cut)
+
+            n_changed = int(np.count_nonzero(good != prev_good))
+            n_bad = int(np.count_nonzero(ok & (delta <= cut)))
+            # logger.info(
+            #     "iter=%d sigma_mad=%.5g cut=%.5g newly_masked=%d changed=%d",
+            #     it + 1, sigma, cut, n_bad, n_changed
+            # )
+
+            if n_changed ==0:
+                break
+
+        return cont0 * smooth
+
 
     def fit(self) -> None:
         """
-        Select eigenspectra for this z, fit coefficients, and build continuum.
-
-        If multiple redshift bins match (overlapping bins), fits each candidate
-        eigenset and selects the solution with the lowest final cost.
+        Select eigenspectra for this z, fit coefficients in normalized space,
+        scale continuum back to observed space, and choose best solution (lowest final cost).
         """
-        zmins, zmaxs = self._keys_as_arrays()
-        match_idx = np.where((self.z >= zmins) & (self.z < zmaxs))[0]
-
+        match_idx = self._matching_bins()
         if match_idx.size == 0:
             raise ValueError("QSO is outside NMF eigenspectra range.")
 
         best = {
-            "cost": np.inf,
-            "coeff": None,
-            "first_cont": None,
-            "cont": None,
-            "first_cost": None,
+            "final_cost": LARGE_CHI2,
+            "coefficients": None,
+            "first_continuum": None,
+            "continuum": None,
+            "first_cost": LARGE_CHI2,
             "zmin": None,
             "zmax": None,
+            "norm": None,
+            "n_comp": None,
+            "method": self.method
         }
 
+        # Keep observed arrays fixed (do not mutate self.flux/ivar)
+        flux_obs = self.flux
+        ivar_obs = self.ivar
+
         for ii in match_idx:
-            zmin, zmax, eig = self._get_eigenset_by_index(int(ii))
+            zmin, zmax, lam_min, lam_max, stat, eig = self._get_eigenset_by_index(int(ii))
+
+            n_comp = min(eig.eigvec.shape)
+
+            # Interpolate eigenspectra to observed grid (still "normalized basis" in observed units)
             A_interp = self._interpolate_eigvec_to_observed(eig)
 
-            if self.method == "nnls":
-                coeff, first_cont, first_cost = self._fit_coeff_nnls(A_interp)
-            else:
-                coeff, first_cont, first_cost = self._fit_coeff_nmf(A_interp)
+            # Normalization window is defined in REST frame in the key, convert to OBS frame
+            lam_min_obs = lam_min * (1.0 + self.z)
+            lam_max_obs = lam_max * (1.0 + self.z)
 
-            cont = self._apply_smooth_correction(first_cont)
+            norm = compute_normalization(
+                wave=self.wave,
+                flux=flux_obs,
+                ivar=ivar_obs,
+                lam_min_obs=lam_min_obs,
+                lam_max_obs=lam_max_obs,
+                stat=stat,
+            )
 
-            cost = self._chi2_reduced(cont)
+            # Skip if norm is not usable
+            if (not np.isfinite(norm)) or (norm <=0.0):
+                logger.info(f"Skipping eigenset z[{zmin:.2f}, {zmax:.2f}) lam[{lam_min:.1f}, {lam_max:.1f}] stat={stat} due to invalid norm={norm:.3e}")
+                logger.warning(f"Continuum failed for the quasar with redshfit: {self.z}, probably due to negative norm...")
+                logger.warning(f"Normalization details: lam_min_obs={lam_min_obs:.1f}, lam_max_obs={lam_max_obs:.1f}, computed norm={norm:.3e}")
+                continue
 
-            if cost < best["cost"]:
+            # Build normalized spectrum for fitting
+            flux_fit = flux_obs / norm
+            ivar_fit = ivar_obs * (norm ** 2)
+            mask_fit = np.isfinite(flux_fit) & np.isfinite(ivar_fit) & (ivar_fit > 0)
+
+            # Fit coefficients in normalized space
+            try:
+                if self.method == "nnls":
+                    coeff, first_cont_norm = self._fit_coeff_nnls(A_interp, flux_fit, ivar_fit, mask_fit)
+                else:
+                    coeff, first_cont_norm = self._fit_coeff_nmf(A_interp, flux_fit, ivar_fit, mask_fit)
+            except Exception:
+                continue
+
+            # Scale first-pass continuum back to OBSERVED units
+            first_cont_obs = first_cont_norm * norm
+
+            # Costs must be against observed spectrum
+            first_cost = self._chi2_reduced_against_observed(first_cont_obs, n_comp)
+
+            # Smooth correction in observed units (uses self.flux/self.mask which are observed)
+            cont_obs = self._apply_smooth_correction(first_cont_obs, kernel_large=self.kernel_large, kernel_small=self.kernel_small)
+            cost = self._chi2_reduced_against_observed(cont_obs, n_comp)
+
+            if cost > first_cost:
+                cost = first_cost # not changing the cost
+                cont_obs = first_cont_obs.copy() # not changing the continnum
+
+            if cost < best["final_cost"]:
                 best.update(
                     {
-                        "cost": cost,
-                        "coeff": coeff,
-                        "first_cont": first_cont,
-                        "cont": cont,
+                        "final_cost": cost,
+                        "coefficients": coeff,
+                        "first_continuum": first_cont_obs,
+                        "continuum": cont_obs,
                         "first_cost": first_cost,
                         "zmin": zmin,
                         "zmax": zmax,
+                        "norm": norm,
+                        "n_comp": n_comp
                     }
                 )
 
-        self.coeff = best["coeff"]
-        self.first_continuum = best["first_cont"]
-        self.continuum = best["cont"]
-        self.first_cost = float(best["first_cost"])
-        self.cost = float(best["cost"])
-        self.eigvec_range = f"z_{best['zmin']:.2f}_{best['zmax']:.2f}"
+        if best["coefficients"] is None:
+            # Extract ncomp from eigenspectra for proper array sizing
+            first_eig = next(iter(self.eigenspectra_dict.values()))
+            ncomp = first_eig['eigvec'].shape[0] if isinstance(first_eig, dict) else first_eig.eigvec.shape[0]
 
+            # Initialize all outputs with zero values
+            best["coefficients"] = np.zeros(ncomp)
+            best["first_continuum"] = np.zeros(self.wave.size)
+            best["continuum"] = np.zeros(self.wave.size)
+            best["first_cost"] = LARGE_CHI2
+            best["final_cost"] = LARGE_CHI2
+            best["norm"] = norm
+            best["zmin"] = -1.0
+            best["zmax"] = -1.0
+            best["n_comp"] = 0
+
+
+            logger.warning(f"Continuum fitting failed for QSO at z={self.z}, returning zero arrays")
+
+        self.coeff = best["coefficients"]
+        self.first_continuum = best["first_continuum"]
+        self.continuum = best["continuum"]
+        self.first_cost = float(best["first_cost"])
+        self.cost = float(best["final_cost"])
+        self.norm = float(best["norm"])
+        self.eigvec_range = f"z_{int(best['zmin']*100):03d}_{int(best['zmax']*100):03d}"
+        self.zmin = float(best["zmin"])
+        self.zmax = float(best["zmax"])
+        self.n_comp = int(best["n_comp"])
 
 # -------------------------
 # Parallel running of the NMF continuum fit
 # -------------------------
 
 def _process_one(args):
-    """Worker for multiprocessing."""
-    wave, flux1, ivar1, z1, eigenspectra, kernel_size, method, maxiters = args
+    """
+    Worker function for multiprocessing pool.
+
+    Args:
+        args (tuple): Tuple of (wave, flux, ivar, z, eigenspectra, kernel_large, method, maxiters).
+
+    Returns:
+        tuple: (coeff, first_continuum, continuum, first_cost, cost, eigvec_range, norm)
+    """
+    wave, flux1, ivar1, z1, eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind = args
     fitter = NMFContinuum(
         wave=wave,
         flux=flux1,
         ivar=ivar1,
         z=z1,
         eigenspectra=eigenspectra,
-        kernel_size=kernel_size,
+        kernel_large=kernel_large,
+        kernel_small=kernel_small,
         method=method,
-        maxiters=maxiters
+        maxiters=maxiters,
+        interp_kind=interp_kind
     )
     fitter.fit()
 
@@ -369,41 +617,51 @@ def _process_one(args):
         fitter.first_cost,
         fitter.cost,
         fitter.eigvec_range,
-    )
+        fitter.zmin,
+        fitter.zmax,
+        fitter.norm,
+        fitter.n_comp
+        )
+
 
 def run_parallel_continuum(
     wave: np.ndarray,
     flux: np.ndarray,
     ivar: np.ndarray,
     z: np.ndarray,
-    eigenspectra: Dict[Tuple[float, float], Any],
-    kernel_size: int,
+    eigenspectra: Dict[Tuple[float, float, float, float, str], Any],
+    kernel_large: int,
+    kernel_small: int,
     method: str,
     n_jobs: int = -1,
-    maxiters: int=100):
-
+    maxiters: int = 100,
+    interp_kind: str = "linear",
+):
     """
     Fit continua for many QSOs in parallel.
 
     Args:
-        wave (np.ndarray): Observed wavelength grid (nwave,).
-        flux (np.ndarray): Flux array (nqso, nwave).
-        ivar (np.ndarray): IVAR array (nqso, nwave).
-        z (np.ndarray): Redshifts (nqso,).
-        eigenspectra (dict): Dict of eigensets keyed by (zmin, zmax).
-        kernel_size (int): Median filter kernel size.
+        wave (np.ndarray): Observed-frame wavelength grid (nwave,).
+        flux (np.ndarray): Observed flux array (nqso, nwave).
+        ivar (np.ndarray): Observed inverse variance array (nqso, nwave).
+        z (np.ndarray): Quasar redshifts (nqso,).
+        eigenspectra (dict): Eigenspectra dictionary with keys (zmin, zmax, lam_min, lam_max, stat).
+        kernel_large (int): Median filter kernel size (odd integer) for intermediate scale fluctuations.
+        kernel_small (int): Median filter kernel size (odd integer) for small scale fluctuations.
         method (str): 'nnls' or 'nmf'.
-        n_jobs (int): Number of processes. If -1, uses mp.cpu_count().
-        maxiters (int): Number of iterations (default is None)
+        n_jobs (int): Number of parallel jobs (-1 for all CPUs; default: -1).
+        maxiters (int): Maximum iterations for solver (default: 100).
+        interp_kind (str): Interpolation method for eigenspectra ('linear' or 'nearest'; default: 'linear').
 
     Returns:
         tuple:
             coefficient_matrix (np.ndarray): (nqso, ncomp) float32
-            first_continuum_matrix (np.ndarray): (nqso, nwave) float32
-            final_continuum_matrix (np.ndarray): (nqso, nwave) float32
-            first_cost (np.ndarray): (nqso,) float32
-            final_cost (np.ndarray): (nqso,) float32
+            first_continuum_matrix (np.ndarray): (nqso, nwave) float32 (OBS units)
+            final_continuum_matrix (np.ndarray): (nqso, nwave) float32 (OBS units)
+            first_cost (np.ndarray): (nqso,) float32  (OBS-based)
+            final_cost (np.ndarray): (nqso,) float32  (OBS-based)
             eigvec_range (np.ndarray): (nqso,) fixed-width bytes
+            norm_factor (np.ndarray): (nqso,) float32
     """
     flux = np.asarray(flux)
     ivar = np.asarray(ivar)
@@ -416,20 +674,20 @@ def run_parallel_continuum(
     if z.shape[0] != flux.shape[0]:
         raise ValueError("z must have length nqso")
 
-    nqso, nwave = flux.shape
+    nqso, _ = flux.shape
 
     if n_jobs == -1:
         n_jobs = mp.cpu_count()
     n_jobs = int(max(1, n_jobs))
 
     tasks = [
-        (wave, flux[i], ivar[i], float(z[i].item()), eigenspectra, kernel_size, method, maxiters)
+        (wave, flux[i], ivar[i], float(z[i].item()), eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind)
         for i in range(nqso)
     ]
 
     t0 = time.time()
     chunksize = max(1, nqso // (10 * n_jobs))
-    print(f'INFO: chunk size for parallel run: {chunksize}')
+    logger.info(f"chunk size for parallel run: {chunksize}")
 
     with mp.Pool(processes=n_jobs) as pool:
         results = list(
@@ -440,11 +698,11 @@ def run_parallel_continuum(
                 unit="qso",
             )
         )
+
     t1 = time.time()
+    logger.info(f"Total continuum computation time for {nqso} QSOs: {t1 - t0:.2f} s")
 
-    print(f"Total continuum computation time for {nqso} QSOs: {t1 - t0:.2f} s")
-
-    coeff_list, first_cont_list, cont_list, first_cost_list, cost_list, range_list = zip(*results)
+    coeff_list, first_cont_list, cont_list, first_cost_list, cost_list, range_list, zmin_list, zmax_list, norm_list, n_comp_list = zip(*results)
 
     coefficient_matrix = np.vstack(coeff_list).astype(np.float32)
     first_continuum_matrix = np.vstack(first_cont_list).astype(np.float32)
@@ -453,14 +711,26 @@ def run_parallel_continuum(
     first_cost = np.asarray(first_cost_list, dtype=np.float32)
     final_cost = np.asarray(cost_list, dtype=np.float32)
 
-    # Store as fixed-width bytes for FITS friendliness
-    eigvec_range = np.asarray(range_list, dtype="S32")
+    eigvec_range = np.asarray(range_list, dtype="S8")
+    zmins = np.asarray(zmin_list, dtype=np.float32)
+    zmaxs = np.asarray(zmax_list, dtype=np.float32)
 
-    return (
-        coefficient_matrix,
-        first_continuum_matrix,
-        final_continuum_matrix,
-        first_cost,
-        final_cost,
-        eigvec_range,
-    )
+    norm_factor = np.asarray(norm_list, dtype=np.float32)
+    n_comp = np.asarray(n_comp_list, dtype=np.int32)
+
+    method_array = np.array([method.upper().encode('utf-8')] * nqso, dtype='S4')
+
+    return {
+        "z": z,
+        "coefficients":coefficient_matrix,
+        "first_continuum":first_continuum_matrix,
+        "continuum":final_continuum_matrix,
+        "first_cost":first_cost,
+        "final_cost":final_cost,
+        "eigvector_range":eigvec_range,
+        "zmin":zmins,
+        "zmax":zmaxs,
+        "norm_factor":norm_factor,
+        "n_comp":n_comp,
+        "method":method_array
+    }

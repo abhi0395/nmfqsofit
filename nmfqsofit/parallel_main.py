@@ -1,14 +1,15 @@
 # nmfqsofit/parallel_main.py
 
 import argparse
+import logging
 import multiprocessing as mp
 
 import numpy as np
-from astropy.io import fits  # kept if you want FITS-related exceptions / checks
 
 from .io import QSOSpecRead, load_all_eigenspectra, write_continuum
 from .nmfcontinuum import run_parallel_continuum
 from .utils import read_nqso_from_header, parse_qso_sequence, _parse_headers
+from .logger import setup_logger
 
 def main():
     """
@@ -84,6 +85,14 @@ def main():
     )
 
     parser.add_argument(
+        "--interp-kind",
+        type=str,
+        required=False,
+        default="linear",
+        help="Interpolation method (all options valid in scipt.interp1d) (default: 'linear').",
+    )
+
+    parser.add_argument(
         "--output",
         type=str,
         required=True,
@@ -99,16 +108,24 @@ def main():
 
     args = parser.parse_args()
 
-    print("==== USER PROVIDED ARGUMENTS ====")
+    # Setup logging
+    logger = setup_logger("nmfqsofit", level=logging.INFO)
+
+    args.kernel_small = int(args.kernel_size / 2)
+
+    if args.kernel_small %2 == 0:
+        args.kernel_small+=1 # just make it odd
+
+    logger.info("==== USER PROVIDED ARGUMENTS ====")
     for key, value in vars(args).items():
-        print(f"INFO: {key}: {value}")
-    print("================================")
+        logger.info(f"{key}: {value}")
+    logger.info("================================")
 
     # Determine number/selection of QSOs
     if args.n_qso is None:
         nqso_total = int(read_nqso_from_header(args.spectra_file))
         qso_selector = str(nqso_total)
-        print(f"INFO: --n-qso not provided; found {nqso_total} QSOs in file. Processing all.")
+        logger.info(f"--n-qso not provided; found {nqso_total} QSOs in file. Processing all.")
     else:
         qso_selector = args.n_qso
         nqso_total = None  # may be unknown until we parse indices
@@ -116,7 +133,7 @@ def main():
     # Parse QSO sequence into explicit indices
     spec_indices = parse_qso_sequence(qso_selector)
     n_selected = len(spec_indices)
-    print(f"INFO: Number of QSOs selected for processing = {n_selected}")
+    logger.info(f"Number of QSOs selected for processing = {n_selected}")
 
     # Read spectra (autoload=True should load arrays into memory once)
     spec = QSOSpecRead(
@@ -139,22 +156,23 @@ def main():
     # Choose CPU count safely (leave 1 core free)
     max_procs = max(1, mp.cpu_count() - 1)
     n_jobs = int(min(args.ncpus, max_procs))
-    print(f"INFO: CPUs available={mp.cpu_count()}, using n_jobs={n_jobs}")
+    logger.info(f"CPUs available={mp.cpu_count()}, using n_jobs={n_jobs}")
 
     # Run continuum fitting in parallel
-    # NOTE: run_parallel_continuum signature should be:
-    #run_parallel_continuum(wave, flux, ivar, z, eigenspectra, kernel_size, method, n_jobs)
-    coefficient_matrix, first_continuum_matrix, final_continuum_matrix, first_cost, final_cost, final_eigvec_range = (
+
+    results = (
         run_parallel_continuum(
             wave=spec.wavelength,
             flux=spec.flux,
             ivar=spec.ivar,
             z=z,
             eigenspectra=eigenspectra,
-            kernel_size=args.kernel_size,
+            kernel_large=args.kernel_size,
+            kernel_small=args.kernel_small,
             method=args.method,
             n_jobs=n_jobs,
-            maxiters=args.maxiters
+            maxiters=args.maxiters,
+            interp_kind=args.interp_kind
         )
     )
 
@@ -162,14 +180,8 @@ def main():
     headers = _parse_headers(args)
 
     # Write output
-    write_continuum(
-        coefficient_matrix=coefficient_matrix,
-        first_continuum_matrix=first_continuum_matrix,
-        continuum_matrix=final_continuum_matrix,
-        first_costs=first_cost,
-        costs=final_cost,
-        eigvector_type=final_eigvec_range,
+    write_continuum(results,
         headers=headers,
         filename=args.output,
     )
-    print(f"INFO: Wrote output to {args.output}")
+    logger.info(f"Wrote output to {args.output}")

@@ -2,13 +2,18 @@
 This script contains functions to read, append and write fits files.
 """
 import os
-import numpy as np
-import time
 import re
+import time
+from pathlib import Path
+
+import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-from pathlib import Path
+
 from .utils import elapsed
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 def _find_hdu_name(hdul, keyword):
     """
@@ -68,7 +73,8 @@ def read_fits_file(fits_file, index=None):
             flux (numpy.ndarray):
                 Flux array. Shape is (nwave,) for a single index, otherwise (nspec, nwave).
             ivar (numpy.ndarray):
-                Inverse variance array. Shape is (nwave,) for a single index, otherwise (nspec, nwave).
+                Inverse variance array. Shape is (nwave,) for a single index,
+                otherwise (nspec, nwave).
             wavelength (numpy.ndarray):
                 Wavelength array with shape (nwave,).
             metadata (astropy.table.Table):
@@ -119,7 +125,11 @@ def read_fits_file(fits_file, index=None):
 
     return header, flux, ivar, wavelength, metadata
 
-def write_continuum(coefficient_matrix, first_continuum_matrix, continuum_matrix, first_costs, costs, eigvector_type,  headers, filename):
+def write_continuum(
+    results,
+    headers,
+    filename,
+):
     """
     Write continuum fitting results to a FITS file.
 
@@ -128,57 +138,41 @@ def write_continuum(coefficient_matrix, first_continuum_matrix, continuum_matrix
         - Image HDU 'COEFFICIENTS': (nspec, ncomp)
         - Image HDU 'FIRST_CONTINUUM': (nspec, nwave)
         - Image HDU 'CONTINUUM': (nspec, nwave)
-        - BinTable HDU 'METADATA': FIRST_COST, FINAL_COST, EIGVECTOR_TYPE
+        - BinTable HDU 'METADATA': FIRST_COST, FINAL_COST, eigvector_range, ZMIN, ZMAX, N_COMP, NORM_FACTOR
 
     Args:
-        coefficient_matrix (numpy.ndarray):
-            Coefficient matrix of shape (nspec, ncomp).
-        first_continuum_matrix (numpy.ndarray):
-            Continuum before median-filter correction, shape (nspec, nwave).
-        continuum_matrix (numpy.ndarray):
-            Final continuum after median-filter correction, shape (nspec, nwave).
-        first_costs (numpy.ndarray):
-            Cost values computed from the first continuum, shape (nspec,).
-        costs (numpy.ndarray):
-            Cost values computed from the final continuum, shape (nspec,).
-        eigvector_type (numpy.ndarray):
-            Array describing which eigenset/bin was selected per spectrum, shape (nspec,).
-            Recommended dtype is fixed-width bytes (e.g., dtype='S32') for FITS compatibility.
+        results (dict):
+            result directory.
         headers (dict, optional):
             Primary header keywords to include.
         filename (str or pathlib.Path):
             Output FITS filename.
-
-    Returns:
-        None
     """
 
-    t0 = time.time()
-
-    # Basic shape checks (fast and prevents silent FITS corruption)
-    if coefficient_matrix.ndim != 2:
+    start_time = time.time()
+    if results["coefficients"].ndim != 2:
         raise ValueError("coefficient_matrix must be 2D (nspec, ncomp)")
-    if first_continuum_matrix.shape != continuum_matrix.shape:
+    if results["first_continuum"].shape != results["continuum"].shape:
         raise ValueError("first_continuum_matrix and continuum_matrix must have the same shape")
-    if first_continuum_matrix.ndim != 2:
+    if results["first_continuum"].ndim != 2:
         raise ValueError("continuum matrices must be 2D (nspec, nwave)")
 
-    nspec = first_continuum_matrix.shape[0]
-    if coefficient_matrix.shape[0] != nspec:
+    nspec = results["first_continuum"].shape[0]
+    if results["coefficients"].shape[0] != nspec:
         raise ValueError("coefficient_matrix first dimension must match nspec")
-    if first_costs.shape[0] != nspec or costs.shape[0] != nspec:
+    if results["first_cost"].shape[0] != nspec or results["final_cost"].shape[0] != nspec:
         raise ValueError("first_costs and costs must have length nspec")
-    if eigvector_type.shape[0] != nspec:
-        raise ValueError("eigvector_type must have length nspec")
+    if results["eigvector_range"].shape[0] != nspec:
+        raise ValueError("eigvector_range must have length nspec")
 
-    hdu_coefficients = fits.ImageHDU(data=coefficient_matrix, name="COEFFICIENTS")
-    hdu_first_continuum = fits.ImageHDU(data=first_continuum_matrix, name="FIRST_CONTINUUM")
-    hdu_continuum = fits.ImageHDU(data=continuum_matrix, name="CONTINUUM")
+    hdu_coefficients = fits.ImageHDU(data=results["coefficients"], name="COEFFICIENTS")
+    hdu_first_continuum = fits.ImageHDU(data=results["first_continuum"], name="FIRST_CONTINUUM")
+    hdu_continuum = fits.ImageHDU(data=results["continuum"], name="CONTINUUM")
 
     meta = Table()
-    meta["FIRST_COST"] = np.asarray(first_costs, dtype=np.float32)
-    meta["FINAL_COST"] = np.asarray(costs, dtype=np.float32)
-    meta["EIGVECTOR_TYPE"] = np.asarray(eigvector_type)
+    for k, val in results.items():
+        if k not in ["coefficients", "first_continuum", "continuum"]:
+            meta[k.upper()] = np.asarray(val)
 
     metadata_hdu = fits.BinTableHDU(meta, name="METADATA")
 
@@ -189,11 +183,14 @@ def write_continuum(coefficient_matrix, first_continuum_matrix, continuum_matrix
 
     primary_hdu = fits.PrimaryHDU(header=header)
 
-    hdul = fits.HDUList([primary_hdu, hdu_coefficients, hdu_first_continuum, hdu_continuum, metadata_hdu])
+    hdul = fits.HDUList(
+        [primary_hdu, hdu_coefficients, hdu_first_continuum, hdu_continuum, metadata_hdu]
+    )
     hdul.writeto(str(filename), overwrite=True)
 
-    print(f"INFO: Data written to {filename}")
-    print(f"INFO: Time taken to write {filename}: {time.time() - t0:.2f} s")
+    logger.info(f"Data written to {filename}")
+    elapsed_time = time.time() - start_time
+    logger.info(f"Time taken to write {filename}: {elapsed_time:.2f} s")
 
 class QSOSpecRead:
     """
@@ -206,9 +203,11 @@ class QSOSpecRead:
 
         Args:
             fits_file (str): Path to the FITS file containing QSO spectra.
-            index (int, list, or np.ndarray, optional): Index or indices of the rows to load. Default is None.
-            autoload (bool): if True, class itself will load the data (default=False),
-                             in True case, user does not need to use available class functions.
+            index (int, list, or np.ndarray, optional):
+                Index or indices of the rows to load. Default is None.
+            autoload (bool):
+                if True, class itself will load the data (default=False),
+                in True case, user does not need to use available class functions.
             verbose (bool): if want to print time info
         """
         self.fits_file = fits_file
@@ -230,16 +229,18 @@ class QSOSpecRead:
         if not os.path.exists(self.fits_file):
             raise IOError(f"ERROR: {self.fits_file} does not exist")
         start_time = time.time()
-        self.header, self.flux, self.ivar, self.wavelength, self.metadata = read_fits_file(self.fits_file, self.index)
+        self.header, self.flux, self.ivar, self.wavelength, self.metadata = read_fits_file(
+            self.fits_file, self.index
+        )
         if self.verbose:
-            elapsed(start_time, f"INFO: Time taken to read {self.fits_file}")
+            elapsed(start_time, f"Time taken to read {self.fits_file}", use_logger=True)
 
 
-def load_all_eigenspectra(data_dir):
+def load_all_eigenspectra(data_path):
     """
-    Load all NMF eigenspectra FITS files in a directory into a dictionary.
+    Load NMF eigenspectra FITS file(s) from a file or directory.
 
-    Files are keyed by (zmin, zmax), parsed from filenames that contain
+    Files are keyed by (zmin, zmax, lam_min, lam_max, stat), parsed from filenames that contain
     two 3-digit integers corresponding to zmin*100 and zmax*100, e.g.:
     ..._000_100_... -> (0.00, 1.00).
 
@@ -248,35 +249,60 @@ def load_all_eigenspectra(data_dir):
         - EIGENVEC
 
     Args:
-        data_dir (str or Path):
-            Directory containing eigenspectra FITS files.
+        data_path (str or Path):
+            Path to a single eigenspectra FITS file or directory containing
+            eigenspectra FITS files.
 
     Returns:
         dict:
-            Mapping (zmin, zmax) -> {"wave": wave, "eigvec": eigvec},
+            Mapping (zmin, zmax, lam_min, lam_max, stat) -> {"wave": wave, "eigvec": eigvec},
             where:
               wave has shape (nwave,)
               eigvec has shape (ncomp, nwave)
+
+    Raises:
+        FileNotFoundError:
+            If `data_path` does not exist.
+        ValueError:
+            If `data_path` is neither a file nor a directory, or if no valid
+            eigenspectra files are found.
+        KeyError:
+            If a FITS file is missing required HDUs.
     """
 
-    if not os.path.exists(data_dir):
-        raise FileNotFoundError(f"data_dir not found: {data_dir}")
-    if not os.path.isdir(data_dir):
-        raise NotADirectoryError(f"data_dir is not a directory: {data_dir}")
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Path not found: {data_path}")
+
+    data_path = Path(data_path)
+
+    # Determine if path is a file or directory
+    if data_path.is_file():
+        logger.info(f"Loading eigenspectra from single file: {data_path}")
+        files = [data_path]
+    elif data_path.is_dir():
+        logger.info(f"Loading eigenspectra from directory: {data_path}")
+        files = sorted(data_path.glob("*.fits"))
+        if not files:
+            raise ValueError(f"No eigenspectra FITS files found in {data_path}")
+    else:
+        raise ValueError(f"Path is neither a file nor a directory: {data_path}")
 
     nmf_dict = {}
-    data_dir = Path(data_dir)
-    files = sorted(data_dir.glob("*.fits"))
+    files_loaded = 0
 
     for filepath in files:
         match = re.search(r"(\d{3})_(\d{3})", filepath.name)
         if match is None:
+            logger.debug(f"Skipping file (no z-bin pattern found): {filepath.name}")
             continue
 
         zmin = int(match.group(1)) / 100.0
         zmax = int(match.group(2)) / 100.0
 
         with fits.open(filepath, memmap=True) as hdul:
+            hdr = hdul[0].header
+            lam_min, lam_max  = hdr["LAMSTART"], hdr["LAMEND"]
+            stat = hdr["NORMSTAT"]
             if "REST_WAVE" not in hdul or "EIGENVEC" not in hdul:
                 raise KeyError(
                     f"{filepath.name} missing required HDUs: REST_WAVE and/or EIGENVEC"
@@ -285,14 +311,26 @@ def load_all_eigenspectra(data_dir):
             wave = np.asarray(hdul["REST_WAVE"].data, dtype=float)
             eigvec = np.asarray(hdul["EIGENVEC"].data, dtype=float).T  # (ncomp, nwave)
 
-        key = (zmin, zmax)
+        key = (zmin, zmax, lam_min, lam_max, stat)
         if key in nmf_dict:
             raise ValueError(f"Duplicate redshift bin {key} from file {filepath.name}")
 
-        nmf_dict[key] = {"wave": wave, "eigvec": eigvec}
+        nmf_dict[key] = {"wave": wave, "eigvec": eigvec, 'headers': hdr}
+        files_loaded += 1
+        logger.debug(
+            f"Loaded eigenspectra from {filepath.name}: "
+            f"z=[{zmin:.2f}, {zmax:.2f}], "
+            f"lambda=[{lam_min:.1f}, {lam_max:.1f}], "
+            f"ncomp={eigvec.shape[0]}, nwave={eigvec.shape[1]}"
+        )
 
     if len(nmf_dict) == 0:
-        raise ValueError(f"No eigenspectra FITS files found in {data_dir}")
+        raise ValueError(f"No eigenspectra FITS files loaded from {data_path}")
+
+    logger.info(
+        f"Successfully loaded {files_loaded} eigenspectra file(s) with {len(nmf_dict)} "
+        f"redshift bins"
+    )
 
     return nmf_dict
 
@@ -311,7 +349,7 @@ def read_continuum_file(
         - 'COEFFICIENTS'    : (nspec, ncomp)
         - 'FIRST_CONTINUUM' : (nspec, nwave)
         - 'CONTINUUM'       : (nspec, nwave)
-        - 'METADATA'        : table with FIRST_COST, FINAL_COST, EIGVECTOR_TYPE
+        - 'METADATA'        : table with FIRST_COST, FINAL_COST, eigvector_range
 
     Args:
         fits_file (str):
@@ -373,7 +411,7 @@ class ContinuumSpec:
         - coefficients
         - first_continuum
         - continuum
-        - metadata (FIRST_COST, FINAL_COST, EIGVECTOR_TYPE)
+        - metadata (FIRST_COST, FINAL_COST, eigvector_range)
     """
 
     def __init__(
@@ -419,7 +457,7 @@ class ContinuumSpec:
         if not os.path.exists(self.fits_file):
             raise FileNotFoundError(f"FITS file does not exist: {self.fits_file}")
 
-        t0 = time.time()
+        start_time = time.time()
         (
             self.header,
             self.coefficients,
@@ -429,5 +467,6 @@ class ContinuumSpec:
         ) = read_continuum_file(self.fits_file, self.index)
 
         if self.verbose:
-            dt = time.time() - t0
-            print(f"INFO: Time taken to read {self.fits_file}: {dt:.2f} s")
+            elapsed_time = time.time() - start_time
+            print(f"INFO: Time taken to read {self.fits_file}: {elapsed_time:.2f} s")
+
