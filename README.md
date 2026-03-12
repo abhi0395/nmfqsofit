@@ -134,20 +134,30 @@ The pipeline automatically:
 
 ## Command Line Usage
 
-### Basic Run
+### Basic Run (using example sdss data)
 
 ```bash
 nmfqsofit \
-  --spectra-file spectra.fits \
+  --spectra-file data/test_sdss_spectra.fits \
   --eigenspectra /path/to/nmfeigenspectra/sdss \
-  --kernel-size 71 \
+  --kernel-size 141 \
   --method nnls \
   --interp-kind linear \
   --ncpus 8 \
-  --output continuum_output.fits \
-  --headers AUTHOR=Abhijeet SURVEY=DESI VERSION=1.0 \
-  --n-qso 100
+  --output continuum.fits \
+  --headers AUTHOR=Abhijeet SURVEY=SDSS VERSION=1.0 \
+  --n-qso 3
 ```
+
+### Running with a configuration file
+
+```bash
+nmfqsofit --config.yml
+## confg.yml fil will have all the user-defined arguments to run the script
+```
+
+See `config_example.yml` file to see how a parameter config file will look like.
+
 
 ### Options
 

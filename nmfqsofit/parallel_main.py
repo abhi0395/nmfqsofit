@@ -3,6 +3,7 @@
 import argparse
 import logging
 import multiprocessing as mp
+import yaml
 
 import numpy as np
 
@@ -34,17 +35,17 @@ def main():
     parser.add_argument(
         "--spectra-file",
         type=str,
-        required=True,
+        required=False,
         help=(
             "Input FITS file containing FLUX, IVAR extensions and METADATA "
-            "extension with redshift column/key 'Z'."
+            "extension with redshift column/key 'Z' (required)."
         ),
     )
     parser.add_argument(
         "--eigenspectra",
         type=str,
-        required=True,
-        help="Directory containing all eigenspectra FITS files.",
+        required=False,
+        help="Directory containing all eigenspectra FITS files (required).",
     )
     parser.add_argument(
         "--ncpus",
@@ -66,8 +67,8 @@ def main():
     parser.add_argument(
         "--kernel-size",
         type=int,
-        default=None,
-        help="Median filter kernel size (odd integer; default: 71).",
+        default=141,
+        help="Median filter kernel size (odd integer; default: 141).",
     )
     parser.add_argument(
         "--method",
@@ -80,7 +81,7 @@ def main():
     parser.add_argument(
         "--maxiters",
         type=int,
-        default=None,
+        default=200,
         help="number of maximum iteration for solver (default 200)",
     )
 
@@ -95,8 +96,8 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        required=True,
-        help="Output FITS filename.",
+        required=False,
+        help="Output FITS filename (required).",
     )
     parser.add_argument(
         "--headers",
@@ -105,8 +106,29 @@ def main():
         default=None,
         help="Extra FITS headers to include in KEY=VALUE format.",
     )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="YAML config file with all arguments. If provided, command-line arguments are ignored.",
+    )
 
     args = parser.parse_args()
+
+    # Load from config file if provided
+    if args.config:
+        with open(args.config, 'r') as f:
+            config = yaml.safe_load(f)
+        # Apply config values to args
+        for key, value in config.items():
+            setattr(args, key, value)
+
+    # Validate that required arguments are present
+    required_args = ['spectra_file', 'eigenspectra', 'output']
+    for arg_name in required_args:
+        if not getattr(args, arg_name, None):
+            source = "config file" if args.config else "command-line arguments"
+            parser.error(f"--{arg_name.replace('_', '-')} is required (provide via {source}).")
 
     # Setup logging
     logger = setup_logger("nmfqsofit", level=logging.INFO)

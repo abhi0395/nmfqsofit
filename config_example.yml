@@ -1,0 +1,22 @@
+# Example YAML config file for nmfqsofit
+# Copy this file, update the paths and parameters, then run:
+
+#  nmfqsofit --config your_config.yml
+################################
+
+spectra_file: /path/to/spectra.fits
+eigenspectra: /path/to/eigenspectra/directory
+output: /path/to/output.fits
+
+# Optional parameters (defaults shown below)
+ncpus: 8
+n_qso: null  # null = process all, or use "100", "1-1000", "1-1000:10"
+kernel_size: 141
+method: nnls  # options: "nnls" or "nmf"
+maxiters: 200
+interp_kind: linear
+
+# Optional headers as list
+headers:
+  - "KEY1=VALUE1"
+  - "KEY2=VALUE2"
