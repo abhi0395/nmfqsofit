@@ -442,11 +442,6 @@ class NMFContinuum:
             good = ok & (delta > cut)
 
             n_changed = int(np.count_nonzero(good != prev_good))
-            n_bad = int(np.count_nonzero(ok & (delta <= cut)))
-            # logger.info(
-            #     "iter=%d sigma_mad=%.5g cut=%.5g newly_masked=%d changed=%d",
-            #     it + 1, sigma, cut, n_bad, n_changed
-            # )
 
             if n_changed ==0:
                 break
@@ -461,7 +456,8 @@ class NMFContinuum:
         """
         match_idx = self._matching_bins()
         if match_idx.size == 0:
-            raise ValueError("QSO is outside NMF eigenspectra range.")
+            logger.warning(f"QSO (redshift: {self.z}) is outside NMF eigenspectra range.")
+
 
         best = {
             "final_cost": LARGE_CHI2,
@@ -562,7 +558,7 @@ class NMFContinuum:
             best["continuum"] = np.zeros(self.wave.size)
             best["first_cost"] = LARGE_CHI2
             best["final_cost"] = LARGE_CHI2
-            best["norm"] = norm
+            best["norm"] = 0.0
             best["zmin"] = -1.0
             best["zmax"] = -1.0
             best["n_comp"] = 0
