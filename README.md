@@ -70,8 +70,8 @@ Clone the repository:
 git clone https://github.com/abhi0395/nmfqsofit.git
 cd nmfqsofit
 
-# Install a tagged version (stable and reproducible). Replace vX.Y.Z with the desired Git tag (for example v2.0.1).
-pip install --upgrade "git+https://github.com/abhi0395/qsoabsfind.git@vX.Y.Z"
+# Install a tagged version (stable and reproducible). Replace vX.Y.Z with the desired Git tag (for example v1.0.0).
+pip install --upgrade "git+https://github.com/abhi0395/nmfqsofit.git@vX.Y.Z"
 
 #Install in editable mode (for developers):
 pip install -e .
