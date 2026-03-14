@@ -40,6 +40,7 @@ nmfqsofit
  
 ----
 
+
 ## Requirements
 
 - Python >= 3.10
@@ -48,14 +49,15 @@ nmfqsofit
 - astropy
 - matplotlib
 - psutil
-- tqdm (for timing)
-- NonnegMFPy (Zhu 2016 NMF implementation) (see [https://github.com/guangtunbenzhu/NonnegMFPy](https://github.com/guangtunbenzhu/NonnegMFPy))
+- tqdm
+- pyyaml
+- NonnegMFPy (Zhu 2016 NMF implementation) ([see here](https://github.com/guangtunbenzhu/NonnegMFPy))
 - pytest (for testing)
 
 Install dependencies manually if needed:
 
 ```bash
-pip install numpy scipy astropy matplotlib psutil pytest NonnegMFPy tqdm
+pip install numpy scipy astropy matplotlib psutil pytest NonnegMFPy tqdm pyyaml
 ```
 
 ---
