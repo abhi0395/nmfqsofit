@@ -121,6 +121,7 @@ class NMFContinuum:
         kernel_small: int,
         method: str,
         maxiters: int,
+        smoothing_niter: int,
         interp_kind: str
     ):
         """
@@ -135,12 +136,14 @@ class NMFContinuum:
             kernel_large (int): Median filter kernel size (odd; default: 71).
             method (str): 'nnls' or 'nmf' (default: 'nnls').
             maxiters (int, optional): Maximum iterations for solver (default: None).
+            smoothing_niter (int, optional): Maximum iterations for median filtering (default: None)
         """
         self.wave = np.asarray(wave)
         self.flux = np.asarray(flux)
         self.ivar = np.asarray(ivar)
         self.z = float(z)
         self.maxiters = maxiters
+        self.smoothing_niter = smoothing_niter
         self.interp_kind = interp_kind
 
         self.delta_lambda = np.nanmedian(self.wave[1:] - self.wave[:-1])
@@ -336,7 +339,7 @@ class NMFContinuum:
         model = coeff @ A_interp
         return coeff, model
 
-    def _apply_smooth_correction(self, first_continuum, kernel_large, kernel_small, nsigma=1.5, niter=3):
+    def _apply_smooth_correction(self, first_continuum, kernel_large, kernel_small, smoothing_niter, nsigma=1.5):
 
         """Apply iterative median-filter correction to remove intermediate
         and small scale fluctuations.
@@ -367,7 +370,7 @@ class NMFContinuum:
             kernel_small (int): Median-filter kernel size for small scales.
                 Must be odd.
             nsigma (float): Sigma threshold for masking narrow absorption features.
-            niter (int): Number of iterations (Zhu typically uses 3).
+            smoothing_niter (int): Number of iterationsfor median filtering.
 
         Returns:
             np.ndarray: Final continuum array (nwave,).
@@ -403,7 +406,7 @@ class NMFContinuum:
         good = good0.copy()
         smooth = np.ones_like(cont0, dtype=float)
 
-        for it in range(int(niter)):
+        for it in range(int(smoothing_niter)):
 
             prev_good = good.copy()
 
@@ -458,7 +461,7 @@ class NMFContinuum:
         if match_idx.size == 0:
             logger.warning(f"QSO (redshift: {self.z}) is outside NMF eigenspectra range.")
 
-
+        
         best = {
             "final_cost": LARGE_CHI2,
             "coefficients": None,
@@ -525,7 +528,7 @@ class NMFContinuum:
             first_cost = self._chi2_reduced_against_observed(first_cont_obs, n_comp)
 
             # Smooth correction in observed units (uses self.flux/self.mask which are observed)
-            cont_obs = self._apply_smooth_correction(first_cont_obs, kernel_large=self.kernel_large, kernel_small=self.kernel_small)
+            cont_obs = self._apply_smooth_correction(first_cont_obs, kernel_large=self.kernel_large, kernel_small=self.kernel_small, smoothing_niter=self.smoothing_niter)
             cost = self._chi2_reduced_against_observed(cont_obs, n_comp)
 
             if cost > first_cost:
@@ -591,7 +594,7 @@ def _process_one(args):
     Returns:
         tuple: (coeff, first_continuum, continuum, first_cost, cost, eigvec_range, norm)
     """
-    wave, flux1, ivar1, z1, eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind = args
+    wave, flux1, ivar1, z1, eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind, smoothing_niter = args
     fitter = NMFContinuum(
         wave=wave,
         flux=flux1,
@@ -602,7 +605,8 @@ def _process_one(args):
         kernel_small=kernel_small,
         method=method,
         maxiters=maxiters,
-        interp_kind=interp_kind
+        interp_kind=interp_kind,
+        smoothing_niter=smoothing_niter
     )
     fitter.fit()
 
@@ -632,6 +636,7 @@ def run_parallel_continuum(
     n_jobs: int = -1,
     maxiters: int = 100,
     interp_kind: str = "linear",
+    smoothing_niter: str = 3
 ):
     """
     Fit continua for many QSOs in parallel.
@@ -648,6 +653,7 @@ def run_parallel_continuum(
         n_jobs (int): Number of parallel jobs (-1 for all CPUs; default: -1).
         maxiters (int): Maximum iterations for solver (default: 100).
         interp_kind (str): Interpolation method for eigenspectra ('linear' or 'nearest'; default: 'linear').
+        smoothing_niter (int): Maximum iteration for median filtering
 
     Returns:
         tuple:
@@ -677,7 +683,7 @@ def run_parallel_continuum(
     n_jobs = int(max(1, n_jobs))
 
     tasks = [
-        (wave, flux[i], ivar[i], float(z[i].item()), eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind)
+        (wave, flux[i], ivar[i], float(z[i].item()), eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind, smoothing_niter)
         for i in range(nqso)
     ]
 

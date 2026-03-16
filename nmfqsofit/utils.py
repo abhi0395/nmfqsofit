@@ -285,7 +285,9 @@ def _parse_headers(args):
     headers["EIGSPEC"] = (str(args.eigenspectra) , 'Eigenvector directory')
     headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing intermediate fluctuation')
     headers["KERN_II"] = (int(args.kernel_small), 'kernel size for removing small fluctuation')
-    headers["MAXITER"] = ((int(args.maxiters) if args.maxiters is not None else -1), 'Maximum iteration for fitting')
+    headers["MAXITER"] = (int(args.maxiters), 'Maximum iteration for fitting')
+    headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
+
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)
         headers[f"DEPVER{k:02d}"] = str(ver)
