@@ -1,7 +1,11 @@
-nmfqsofit
-============
+<div align="center">
+    <img src="logo.png" width="525" height="257"/>
+</div>
 
-**An Efficient, Fast, and Reliable Automated Continuum Fitter for Low-Resolution Quasar Spectra Using Non-negative Matrix Factorization (NMF)**
+<br>
+
+<div align="center">
+
 
 [![github shields.io](https://img.shields.io/badge/GitHub-abhi0395%2Fnmfqsofit-blue.svg?style=flat)](https://github.com/abhi0395/nmfqsofit)
 [![github shields.io](https://img.shields.io/badge/GitHub-abhi0395%2Fnmfeigenspectra-pink.svg?style=flat)](https://github.com/abhi0395/nmfeigenspectra)
@@ -10,6 +14,12 @@ nmfqsofit
 [![arXiv-1612.06037](http://img.shields.io/badge/arXiv-1612.06037-orange.svg?style=flat)](https://arxiv.org/abs/1612.06037)
 [![license shields.io](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](https://github.com/abhi0395/nmfqsofit/blob/main/LICENSE)
 
+</div>
+
+nmfqsofit: Quasar Continuum Fitter
+============
+
+**An Efficient, Fast, and Reliable Automated Continuum Fitter for Low-Resolution Quasar Spectra Using Non-negative Matrix Factorization (NMF)**
 
 `nmfqsofit` is a fast, modular, and scalable Python package for estimating quasar continua using precomputed NMF eigenspectra. It supports both NNLS-based fitting vectorized NMF coefficient estimation, works with SDSS/DESI/4MOST/WEAVE-like spectra, and is designed for large spectroscopic surveys and HPC environments.
 
