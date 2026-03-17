@@ -17,13 +17,13 @@ nmfqsofit
 
 ## Features
 
-- **NMF-based quasar continuum modeling** – Fits coefficients using Non-negative Matrix Factorization  
-- **NNLS alternative** – Optionally use Non-Negative Least Squares for coefficient fitting  
+- **NMF-based quasar continuum modeling** – Fits coefficients using Non-negative Matrix Factorization (slower)
+- **NNLS alternative** – Optionally use Non-Negative Least Squares for coefficient fitting (faster)
 - **Spectrum normalization & scaling** – Fits the normalized spectrum and automatically scales the continuum back to the observed frame  
 - **Flexible eigenvector interpolation** – Interpolates NMF eigenvectors to observed frame using user-provided interpolation kind (e.g., 'linear', 'cubic', 'nearest')  
 - **Multiple redshift-dependent eigenspectra support** – Handles multiple redshift bins with automatic selection based on quasar redshift  
 - **Automatic best-eigenset selection** – Selects the eigenset with minimum cost when multiple bins are valid  
-- **Median filtering flexibility** – Performs smoothing on continuum model iteratively to get the best chi2 value  
+- **Median filtering flexibility** – Performs iterative smoothing on continuum model to improve reduced chi2 by removing small and intermediate scale fluctuations  
 - **Comprehensive logging framework** – Structured logging with python log levels for observability  
 - **Efficient parallel processing** – Multiprocessing-based batch fitting optimized for HPC environments  
 - **Flexible eigenspectra loading** – Load from single FITS files or entire directories  
@@ -35,8 +35,8 @@ nmfqsofit
 
 ## Designed For
 
-- Large spectroscopic surveys (SDSS, DESI, 4MOST, WEAVE, WAVES, HST etc.)
-- Local system or HPC continuum fitting  
+- Large spectroscopic surveys (SDSS, DESI, MUSE, 4MOST, WEAVE, WAVES, HST etc.)
+- Local system or HPC slurm based jobs
  
 ----
 
@@ -112,7 +112,7 @@ The pipeline automatically:
 - Selects appropriate eigenspectra based on quasar redshift  
 - Fits using all matching redshift bins  
 - Use either NMF or NNLS method to find continuum coefficients
-- Performs efficient smoothing to improve chi2
+- Performs efficient smoothing to improve reduced chi2
 - Chooses the solution with minimum cost (i.e. reduced chi2) 
 - Logs detailed information about loaded eigenspectra (redshift bins, wavelength ranges, number of components)
 ---
@@ -154,7 +154,7 @@ nmfqsofit \
 ### Running with a configuration file
 
 ```bash
-nmfqsofit --config.yml
+nmfqsofit --config config_example.yml
 ## confg.yml fil will have all the user-defined arguments to run the script
 ```
 
@@ -169,7 +169,8 @@ See `config_example.yml` file to see how a parameter config file will look like.
 - `--method`: Fitting method – `nnls` (Non-Negative Least Squares) or `nmf` (Non-negative Matrix Factorization; default: `nnls`)
 - `--interp-kind`: Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.; default: `linear`)
 - `--ncpus`: Number of CPU processes for parallel fitting (default: 8)
-- `--maxiters`: Maximum iterations for NMF solver (default: 200)
+- `--maxiters`: Maximum iterations for NMF or NNLS solver (default: 200)
+- `--smoothing_niter`: number of maximum iteration for median filtering (default 3)
 - `--n-qso`: Number of QSOs to process – can be an integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`)
 - `--output`: Output FITS filename
 - `--headers`: Optional FITS header keywords (e.g., `AUTHOR=Name SURVEY=Mission`)
@@ -184,8 +185,8 @@ The output FITS file contains:
 
 | HDU | Description |
 |------|------------|
-| Primary | Header only |
-| COEFFICIENTS | NMF coefficients (nspec × ncomp) |
+| Primary | Headers only |
+| COEFFICIENTS | NMF or NNLS coefficients (nspec × ncomp) |
 | FIRST_CONTINUUM | First reconstructed continuum (before median filtering) |
 | CONTINUUM | Final median-filter corrected continuum |
 | METADATA | Z, FIRST_COST, FINAL_COST, EIGVECTOR_RANGE, ZMIN, ZMAX, NORM_FACTOR, N_COMP |
@@ -235,7 +236,7 @@ Contributions are welcome! Please submit a pull request or open an issue to disc
 License
 -------
 
-Copyright (c) 2021-2025 Abhijeet Anand.
+Copyright (c) 2021-2026 Abhijeet Anand.
 
 **nmfqsofit** is a free software made available under the MIT License. For details, see the LICENSE file.
 
