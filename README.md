@@ -233,6 +233,11 @@ Contribution
 
 Contributions are welcome! Please submit a pull request or open an issue to discuss your ideas.
 
+Acknowledgements
+-----------
+
+The first crude version of the code was developed and written by me during my PhD with lots of suggestions from my PhD supervisors [Prof. Dr. Guinevere Kauffmann](https://www.mpa-garching.mpg.de/person/44092) and [Dr. Dylan Nelson](https://nelson.tng-project.org/). Over the years, it has evolved from a specialized script into the generic, community-ready framework it is today. I would like to extend my thanks to the VS Code AI agents, which were instrumental in refining the codebase. They provided invaluable assistance in documenting functions, optimizing logic, and expanding unit test coverage, helping to ensure the code is both robust and maintainable.
+
 License
 -------
 
