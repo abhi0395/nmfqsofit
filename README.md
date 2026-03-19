@@ -13,6 +13,7 @@
 [![arXiv-2103.15842](http://img.shields.io/badge/arXiv-2103.15842-orange.svg?style=flat)](https://arxiv.org/abs/2103.15842)
 [![arXiv-1612.06037](http://img.shields.io/badge/arXiv-1612.06037-orange.svg?style=flat)](https://arxiv.org/abs/1612.06037)
 [![license shields.io](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](https://github.com/abhi0395/nmfqsofit/blob/main/LICENSE)
+[![codecov](https://codecov.io/gh/abhi0395/nmfqsofit/graph/badge.svg)](https://codecov.io/gh/abhi0395/nmfqsofit)
 
 </div>
 
