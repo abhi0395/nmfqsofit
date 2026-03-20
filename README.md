@@ -1,15 +1,26 @@
-nmfqsofit
-============
+<div align="center">
+    <img src="logo.png" width="525" height="257"/>
+</div>
 
-**An Efficient, Fast, and Reliable Automated Continuum Fitter for Low-Resolution Quasar Spectra Using Non-negative Matrix Factorization (NMF)**
+<br>
+
+<div align="center">
+
 
 [![github shields.io](https://img.shields.io/badge/GitHub-abhi0395%2Fnmfqsofit-blue.svg?style=flat)](https://github.com/abhi0395/nmfqsofit)
 [![github shields.io](https://img.shields.io/badge/GitHub-abhi0395%2Fnmfeigenspectra-pink.svg?style=flat)](https://github.com/abhi0395/nmfeigenspectra)
 [![arXiv-2504.20299](http://img.shields.io/badge/arXiv-2504.20299-orange.svg?style=flat)](https://arxiv.org/abs/2504.20299)
 [![arXiv-2103.15842](http://img.shields.io/badge/arXiv-2103.15842-orange.svg?style=flat)](https://arxiv.org/abs/2103.15842)
 [![arXiv-1612.06037](http://img.shields.io/badge/arXiv-1612.06037-orange.svg?style=flat)](https://arxiv.org/abs/1612.06037)
+[![codecov](https://codecov.io/gh/abhi0395/nmfqsofit/graph/badge.svg)](https://codecov.io/gh/abhi0395/nmfqsofit)
 [![license shields.io](http://img.shields.io/badge/license-MIT-blue.svg?style=flat)](https://github.com/abhi0395/nmfqsofit/blob/main/LICENSE)
 
+</div>
+
+nmfqsofit: Quasar Continuum Fitter
+============
+
+**An Efficient, Fast, and Reliable Automated Continuum Fitter for Low-Resolution Quasar Spectra Using Non-negative Matrix Factorization (NMF)**
 
 `nmfqsofit` is a fast, modular, and scalable Python package for estimating quasar continua using precomputed NMF eigenspectra. It supports both NNLS-based fitting vectorized NMF coefficient estimation, works with SDSS/DESI/4MOST/WEAVE-like spectra, and is designed for large spectroscopic surveys and HPC environments.
 
@@ -17,13 +28,13 @@ nmfqsofit
 
 ## Features
 
-- **NMF-based quasar continuum modeling** – Fits coefficients using Non-negative Matrix Factorization  
-- **NNLS alternative** – Optionally use Non-Negative Least Squares for coefficient fitting  
+- **NMF-based quasar continuum modeling** – Fits coefficients using Non-negative Matrix Factorization (slower)
+- **NNLS alternative** – Optionally use Non-Negative Least Squares for coefficient fitting (faster)
 - **Spectrum normalization & scaling** – Fits the normalized spectrum and automatically scales the continuum back to the observed frame  
 - **Flexible eigenvector interpolation** – Interpolates NMF eigenvectors to observed frame using user-provided interpolation kind (e.g., 'linear', 'cubic', 'nearest')  
 - **Multiple redshift-dependent eigenspectra support** – Handles multiple redshift bins with automatic selection based on quasar redshift  
 - **Automatic best-eigenset selection** – Selects the eigenset with minimum cost when multiple bins are valid  
-- **Median filtering flexibility** – Performs smoothing on continuum model iteratively to get the best chi2 value  
+- **Median filtering flexibility** – Performs iterative smoothing on continuum model to improve reduced chi2 by removing small and intermediate scale fluctuations  
 - **Comprehensive logging framework** – Structured logging with python log levels for observability  
 - **Efficient parallel processing** – Multiprocessing-based batch fitting optimized for HPC environments  
 - **Flexible eigenspectra loading** – Load from single FITS files or entire directories  
@@ -35,8 +46,8 @@ nmfqsofit
 
 ## Designed For
 
-- Large spectroscopic surveys (SDSS, DESI, 4MOST, WEAVE, WAVES, HST etc.)
-- Local system or HPC continuum fitting  
+- Large spectroscopic surveys (SDSS, DESI, MUSE, 4MOST, WEAVE, WAVES, HST etc.)
+- Local system or HPC slurm based jobs
  
 ----
 
@@ -90,7 +101,7 @@ nmfqsofit --help
 
 The NMF eigenspectra are maintained in a separate [repository](https://github.com/abhi0395/nmfeigenspectra). This keeps the eigenspectra data independent from the `nmfqsofit` codebase, allowing both to evolve separately. Currently, the repository provides eigenspectra built from **SDSS DR14** and **DESI DR1** quasar spectra only. In the future, eigenspectra from additional surveys (e.g., 4MOST, WEAVE, HST, WAVES) will be added.
 
-Before running `nmfqsofit`, download the eigenspectra repository:
+Before running `nmfqsofit`, download the eigenspectra repository. It is recommeded to use tagged version to ensure reproducibility. 
 
 ```bash
 git clone https://github.com/abhi0395/nmfeigenspectra.git
@@ -112,7 +123,7 @@ The pipeline automatically:
 - Selects appropriate eigenspectra based on quasar redshift  
 - Fits using all matching redshift bins  
 - Use either NMF or NNLS method to find continuum coefficients
-- Performs efficient smoothing to improve chi2
+- Performs efficient smoothing to improve reduced chi2
 - Chooses the solution with minimum cost (i.e. reduced chi2) 
 - Logs detailed information about loaded eigenspectra (redshift bins, wavelength ranges, number of components)
 ---
@@ -154,8 +165,8 @@ nmfqsofit \
 ### Running with a configuration file
 
 ```bash
-nmfqsofit --config.yml
-## confg.yml fil will have all the user-defined arguments to run the script
+nmfqsofit --config config_example.yml
+## config.yml file will contain all the user-defined arguments to run the script
 ```
 
 See `config_example.yml` file to see how a parameter config file will look like.
@@ -169,7 +180,8 @@ See `config_example.yml` file to see how a parameter config file will look like.
 - `--method`: Fitting method – `nnls` (Non-Negative Least Squares) or `nmf` (Non-negative Matrix Factorization; default: `nnls`)
 - `--interp-kind`: Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.; default: `linear`)
 - `--ncpus`: Number of CPU processes for parallel fitting (default: 8)
-- `--maxiters`: Maximum iterations for NMF solver (default: 200)
+- `--maxiters`: Maximum iterations for NMF or NNLS solver (default: 200)
+- `--smoothing-niter`: number of maximum iteration for median filtering (default 3)
 - `--n-qso`: Number of QSOs to process – can be an integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`)
 - `--output`: Output FITS filename
 - `--headers`: Optional FITS header keywords (e.g., `AUTHOR=Name SURVEY=Mission`)
@@ -184,8 +196,8 @@ The output FITS file contains:
 
 | HDU | Description |
 |------|------------|
-| Primary | Header only |
-| COEFFICIENTS | NMF coefficients (nspec × ncomp) |
+| Primary | Headers only |
+| COEFFICIENTS | NMF or NNLS coefficients (nspec x ncomp), can be used to construct first continuum |
 | FIRST_CONTINUUM | First reconstructed continuum (before median filtering) |
 | CONTINUUM | Final median-filter corrected continuum |
 | METADATA | Z, FIRST_COST, FINAL_COST, EIGVECTOR_RANGE, ZMIN, ZMAX, NORM_FACTOR, N_COMP |
@@ -199,20 +211,36 @@ Plotting Example
 from nmfqsofit.io import QSOSpecRead, ContinuumSpec
 from nmfqsofit.utils import plot_flux_and_continuum
 
-spec  = QSOSpecRead(spectra_file, autoload=True) # read spectra 
-nmfmodel  = ContinuumSpec(continuum_file, autoload=True) # read continuum data
+# Read QSO spectra (FLUX, IVAR, WAVELENGTH, METADATA)
+spec = QSOSpecRead("/path/to/your/spectra.fits", autoload=True)
 
-# To see continuum metadata:
-nmfmodel.metadata
+# Read nmfqsofit continuum output (COEFFICIENTS, FIRST_CONTINUUM, CONTINUUM, METADATA)
+nmfmodel = ContinuumSpec("/path/to/your/continuum.fits", autoload=True)
 
-plot_flux_and_continuum(
-    spec.wave,
-    spec.flux[0,:],
-    nmfmodel.continuum[0,:],
-    flux_kwargs={"color": "black"},
-    continuum_kwargs={"color": "red", "lw": 2}
+# Plot flux and continuum for the first QSO
+ax = plot_flux_and_continuum(
+    spec.wavelength,           # observed wavelength array  (nwave,)
+    spec.flux[0, :],           # flux of the 1st QSO        (nwave,)
+    nmfmodel.continuum[0, :],  # NMF continuum of 1st QSO   (nwave,)
+    title=f"QSO  z = {nmfmodel.metadata['Z'][0]:.3f}",
+    flux_kwargs={"color": "black", "lw": 1, "alpha": 0.8},
+    continuum_kwargs={"color": "red", "lw": 2},
+    ax_kwargs={"xlim": (3600, 10000)},
 )
 ```
+
+---
+
+Useful notes:
+-------------
+
+Parallel mode can be memory-intensive if the input FITS file is large in size. As the code accesses the FITS file to read QSO spectra when running in parallel, it can become a bottleneck for memory, and the code may fail. Currently, I suggest the following:
+
+- **Divide your file into smaller chunks:** Split the FITS file into several smaller files, each containing approximately `N` spectra. Then run the code on these smaller files.
+
+- **Use a rule of thumb for file size:** Ensure that the size of each individual file is no larger than `total_memory/ncpu` of your node or system. Based on this idea you can decide your `N`. I would suggest `N = 1000-2000`.
+
+In order to decide the right size of the FITS file, consider the total available memory and the number of CPUs in your system.
 
 ---
 
@@ -232,10 +260,15 @@ Contribution
 
 Contributions are welcome! Please submit a pull request or open an issue to discuss your ideas.
 
+Acknowledgements
+-----------
+
+The first crude version of the code was developed and written by me during my PhD with lots of suggestions from my PhD supervisors [Prof. Dr. Guinevere Kauffmann](https://www.mpa-garching.mpg.de/person/44092) and [Dr. Dylan Nelson](https://nelson.tng-project.org/). Over the years, it has evolved from a specialized script into the generic, community-ready framework it is today. I would like to extend my thanks to the VS Code AI agents, which were instrumental in refining the codebase. They provided invaluable assistance in documenting functions, logging details, optimizing logic, and expanding unit test coverage, helping to ensure the code is both robust and maintainable. The project logo was created from a continuum example generated by me, with assistance from ChatGPT-5.3.
+
 License
 -------
 
-Copyright (c) 2021-2025 Abhijeet Anand.
+Copyright (c) 2021-2026 Abhijeet Anand.
 
 **nmfqsofit** is a free software made available under the MIT License. For details, see the LICENSE file.
 

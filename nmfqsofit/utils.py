@@ -285,7 +285,22 @@ def _parse_headers(args):
     headers["EIGSPEC"] = (str(args.eigenspectra) , 'Eigenvector directory')
     headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing intermediate fluctuation')
     headers["KERN_II"] = (int(args.kernel_small), 'kernel size for removing small fluctuation')
-    headers["MAXITER"] = ((int(args.maxiters) if args.maxiters is not None else -1), 'Maximum iteration for fitting')
+
+    # Handle maxiters more robustly: allow None (e.g., YAML null) and map it to -1,
+    # while still validating other invalid values with a clear error.
+    if args.maxiters is None:
+        maxiters_value = -1
+    else:
+        try:
+            maxiters_value = int(args.maxiters)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Invalid value for maxiters: {args.maxiters!r}. Expected an integer or null."
+            ) from exc
+
+    headers["MAXITER"] = (maxiters_value, 'Maximum iteration for fitting')
+    headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
+
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)
         headers[f"DEPVER{k:02d}"] = str(ver)

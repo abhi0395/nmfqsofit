@@ -82,7 +82,7 @@ def main():
         "--maxiters",
         type=int,
         default=200,
-        help="number of maximum iteration for solver (default 200)",
+        help="number of maximum iteration for NMF or NNLS solver (default 200)",
     )
 
     parser.add_argument(
@@ -91,6 +91,13 @@ def main():
         required=False,
         default="linear",
         help="Interpolation method (all options valid in scipt.interp1d) (default: 'linear').",
+    )
+
+    parser.add_argument(
+        "--smoothing-niter",
+        type=int,
+        default=3,
+        help="number of maximum iteration for median filtering (default 3)",
     )
 
     parser.add_argument(
@@ -194,7 +201,8 @@ def main():
             method=args.method,
             n_jobs=n_jobs,
             maxiters=args.maxiters,
-            interp_kind=args.interp_kind
+            interp_kind=args.interp_kind,
+            smoothing_niter=args.smoothing_niter
         )
     )
 
