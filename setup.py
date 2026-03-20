@@ -1,19 +1,9 @@
 
-import subprocess
 from setuptools import setup, find_packages
-
-def get_version():
-    try:
-        version = subprocess.check_output([
-            'git', 'describe', '--tags', '--abbrev=0'
-        ]).decode('utf-8').strip()
-        return version
-    except Exception:
-        return '0.0.0'
 
 setup(
     name='nmfqsofit',
-    version=get_version(),
+    use_scm_version=True,
     packages=find_packages(),
     install_requires=[
         'numpy',
