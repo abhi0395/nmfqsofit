@@ -23,9 +23,11 @@ setup(
         'NonnegMFPy',
         'tqdm',
         'scipy',
-        'pytest',
         'pyyaml',
     ],
+    extras_require={
+        'dev': ['pytest'],
+    },
     entry_points={
         'console_scripts': [
             'nmfqsofit=nmfqsofit.parallel_main:main',

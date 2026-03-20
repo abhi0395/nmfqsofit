@@ -63,7 +63,6 @@ nmfqsofit: Quasar Continuum Fitter
 - tqdm
 - pyyaml
 - NonnegMFPy (Zhu 2016 NMF implementation) ([see here](https://github.com/guangtunbenzhu/NonnegMFPy))
-- pytest (for testing)
 
 Install dependencies manually if needed:
 

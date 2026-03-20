@@ -286,10 +286,9 @@ def _parse_headers(args):
     headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing intermediate fluctuation')
     headers["KERN_II"] = (int(args.kernel_small), 'kernel size for removing small fluctuation')
 
-    # Handle maxiters more robustly: allow None (e.g., YAML null) and map it to -1,
     # while still validating other invalid values with a clear error.
     if args.maxiters is None:
-        maxiters_value = -1
+        maxiters_value = None
     else:
         try:
             maxiters_value = int(args.maxiters)
@@ -298,7 +297,7 @@ def _parse_headers(args):
                 f"Invalid value for maxiters: {args.maxiters!r}. Expected an integer or null."
             ) from exc
 
-    headers["MAXITER"] = (maxiters_value, 'Maximum iteration for fitting')
+    headers["MAXITER"] = (maxiters_value, 'Maximum iteration for fitting (None means default as used solvers)')
     headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
 
     for k, (pkg, ver) in enumerate(versions.items()):
