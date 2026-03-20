@@ -85,7 +85,7 @@ class TestComputeNormalization(unittest.TestCase):
                                   stat="rms")
 
     def test_too_few_valid_pixels_returns_nan(self):
-        # Only 2 pixels in range and all ivar=0 → fewer than 5 valid
+        # Only 2 pixels in range and all ivar=0 - fewer than 5 valid
         ivar = np.zeros(200)
         result = compute_normalization(self.wave, self.flux, ivar,
                                        lam_min_obs=4000.0, lam_max_obs=8000.0)
@@ -291,7 +291,7 @@ class TestApplySmoothCorrection(unittest.TestCase):
         result = self.fitter._apply_smooth_correction(
             first_cont, kernel_large=-1, kernel_small=-1, smoothing_niter=2
         )
-        # With None kernels the smooth ratio stays 1 → result == first_cont
+        # With None kernels the smooth ratio stays 1 - result == first_cont
         np.testing.assert_allclose(result, first_cont)
 
     def test_even_kernel_raises(self):
@@ -338,7 +338,7 @@ class TestNMFContinuumFit(unittest.TestCase):
         self.assertAlmostEqual(fitter.first_cost, LARGE_CHI2)
 
     def test_fit_invalid_norm_uses_zero_fallback(self):
-        # Make ivar=0 everywhere → norm = nan → no valid eigenset → fallback
+        # Make ivar=0 everywhere - norm = nan - no valid eigenset - fallback
         fitter = _make_fitter()
         fitter.ivar = np.zeros_like(fitter.ivar)
         fitter.mask = np.zeros(fitter.wave.size, dtype=bool)

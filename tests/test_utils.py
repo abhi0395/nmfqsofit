@@ -151,7 +151,7 @@ class TestInterpolation1D(unittest.TestCase):
         xnew = np.array([0.0, 5.0, 10.0])
         result = interpolation1D(xnew, self.xold, self.yold, kind="linear")
         self.assertEqual(result.shape, (3,))
-        # End-points should be within interpolation range → finite
+        # End-points should be within interpolation range - finite
         self.assertTrue(np.isfinite(result[0]))
 
     def test_outside_range_gives_fill_value(self):

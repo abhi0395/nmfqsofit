@@ -197,7 +197,7 @@ The output FITS file contains:
 | HDU | Description |
 |------|------------|
 | Primary | Headers only |
-| COEFFICIENTS | NMF or NNLS coefficients (nspec × ncomp) |
+| COEFFICIENTS | NMF or NNLS coefficients (nspec x ncomp), can be used to construct first continuum |
 | FIRST_CONTINUUM | First reconstructed continuum (before median filtering) |
 | CONTINUUM | Final median-filter corrected continuum |
 | METADATA | Z, FIRST_COST, FINAL_COST, EIGVECTOR_RANGE, ZMIN, ZMAX, NORM_FACTOR, N_COMP |
