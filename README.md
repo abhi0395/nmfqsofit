@@ -166,7 +166,7 @@ nmfqsofit \
 
 ```bash
 nmfqsofit --config config_example.yml
-## confg.yml fil will have all the user-defined arguments to run the script
+## config.yml file will contain all the user-defined arguments to run the script
 ```
 
 See `config_example.yml` file to see how a parameter config file will look like.
