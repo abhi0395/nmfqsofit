@@ -215,7 +215,7 @@ from nmfqsofit.utils import plot_flux_and_continuum
 spec = QSOSpecRead("/path/to/your/spectra.fits", autoload=True)
 
 # Read nmfqsofit continuum output (COEFFICIENTS, FIRST_CONTINUUM, CONTINUUM, METADATA)
-nmfmodel = ContinuumSpec("/path/to/your/continuu.fits", autoload=True)
+nmfmodel = ContinuumSpec("/path/to/your/continuum.fits", autoload=True)
 
 # Plot flux and continuum for the first QSO
 ax = plot_flux_and_continuum(
