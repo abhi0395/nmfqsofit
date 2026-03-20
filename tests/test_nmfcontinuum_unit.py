@@ -21,10 +21,10 @@ def _make_eigenspectra_dict(n_comp=3, n_wave=80,
                              lam_min=1000.0, lam_max=3000.0,
                              stat="median"):
     """Return a minimal eigenspectra dict for NMFContinuum."""
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
     rest_wave = np.linspace(lam_min, lam_max, n_wave)
     # Non-negative eigen-vectors
-    eigvec = np.abs(np.random.rand(n_comp, n_wave)) + 0.1
+    eigvec = np.abs(rng.random((n_comp, n_wave))) + 0.1
     key = (zmin, zmax, lam_min, lam_max, stat)
     return {key: {"wave": rest_wave, "eigvec": eigvec, "headers": {}}}
 
