@@ -181,7 +181,7 @@ See `config_example.yml` file to see how a parameter config file will look like.
 - `--interp-kind`: Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.; default: `linear`)
 - `--ncpus`: Number of CPU processes for parallel fitting (default: 8)
 - `--maxiters`: Maximum iterations for NMF or NNLS solver (default: 200)
-- `--smoothing_niter`: number of maximum iteration for median filtering (default 3)
+- `--smoothing-niter`: number of maximum iteration for median filtering (default 3)
 - `--n-qso`: Number of QSOs to process – can be an integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`)
 - `--output`: Output FITS filename
 - `--headers`: Optional FITS header keywords (e.g., `AUTHOR=Name SURVEY=Mission`)

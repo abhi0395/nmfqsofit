@@ -82,7 +82,7 @@ def main():
         "--maxiters",
         type=int,
         default=200,
-        help="number of maximum iteration for solver (default 200)",
+        help="number of maximum iteration for NMF or NNLS solver (default 200)",
     )
 
     parser.add_argument(
@@ -92,7 +92,7 @@ def main():
         default="linear",
         help="Interpolation method (all options valid in scipt.interp1d) (default: 'linear').",
     )
-    
+
     parser.add_argument(
         "--smoothing-niter",
         type=int,
