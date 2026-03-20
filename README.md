@@ -101,7 +101,7 @@ nmfqsofit --help
 
 The NMF eigenspectra are maintained in a separate [repository](https://github.com/abhi0395/nmfeigenspectra). This keeps the eigenspectra data independent from the `nmfqsofit` codebase, allowing both to evolve separately. Currently, the repository provides eigenspectra built from **SDSS DR14** and **DESI DR1** quasar spectra only. In the future, eigenspectra from additional surveys (e.g., 4MOST, WEAVE, HST, WAVES) will be added.
 
-Before running `nmfqsofit`, download the eigenspectra repository:
+Before running `nmfqsofit`, download the eigenspectra repository. It is recommeded to use tagged version to ensure reproducibility. 
 
 ```bash
 git clone https://github.com/abhi0395/nmfeigenspectra.git
