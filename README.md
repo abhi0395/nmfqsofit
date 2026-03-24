@@ -144,6 +144,21 @@ The pipeline automatically:
 
 ---
 
+Input FITS Structure
+------------
+
+The input FITS file must have the following structure:
+
+| HDU | Description |
+|------|------------|
+| Primary | Headers only |
+| FLUX | Observed flux |
+| IVAR | Observed ivar (inverse-variance) |
+| WAVELENGTH | observed wavelength |
+| METADATA | Spectra metadata, must contain redshift of Quasars with key **Z** |
+
+---
+
 ## Command Line Usage
 
 ### Basic Run (using example sdss data)
@@ -248,8 +263,8 @@ Citations
 
 If you use this code, please cite:
 
-- [Anand et al. 2025](https://arxiv.org/abs/2504.20299), Description of **nmfqsofit** and DESI DR1 continuum
-- [Anand et al. 2021](https://arxiv.org/abs/2103.15842), SDSS DR14 Eigenspectra
+- [Anand et al. (in prep](https://github.com/abhi0395/nmfqsofit)), Full Description of **nmfqsofit** and DESI DR1 eigenspectra and continuum
+- [Anand et al. 2021](https://arxiv.org/abs/2103.15842), First development of **nmfqsofit** and SDSS DR14 eigenspectra and continuum 
 - [Zhu 2016](https://arxiv.org/abs/1612.06037), Vectorized NMF implementation
 
 ---
