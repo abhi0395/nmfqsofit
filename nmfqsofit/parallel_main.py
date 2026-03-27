@@ -50,7 +50,7 @@ def main():
     parser.add_argument(
         "--ncpus",
         type=int,
-        default=8,
+        default=4,
         help="Number of CPU processes to use (default: 8).",
     )
     parser.add_argument(
@@ -98,6 +98,20 @@ def main():
         type=int,
         default=3,
         help="number of maximum iteration for median filtering (default 3)",
+    )
+
+    parser.add_argument(
+        "--fit-niter",
+        type=int,
+        default=1,
+        help="number of sigma-rejection iterations during coefficient fitting (default 1; set to 0 for no rejection).",
+    )
+
+    parser.add_argument(
+        "--fit-nsigma",
+        type=float,
+        default=3.0,
+        help="sigma threshold for absorption masking during coefficient fitting (default 3.0)",
     )
 
     parser.add_argument(
@@ -202,7 +216,9 @@ def main():
             n_jobs=n_jobs,
             maxiters=args.maxiters,
             interp_kind=args.interp_kind,
-            smoothing_niter=args.smoothing_niter
+            smoothing_niter=args.smoothing_niter,
+            fit_niter=args.fit_niter,
+            fit_nsigma=args.fit_nsigma,
         )
     )
 
