@@ -377,8 +377,7 @@ class NMFContinuum:
             pull[ok] = (flux_fit[ok] - model[ok]) * np.sqrt(ivar_fit[ok])
 
             # Estimate sigma from emission-side pixels only (pull > 0).
-            # These are unaffected by absorption and give the true noise level,
-            # avoiding the inflated sigma that results from including absorbed pixels.
+
             above = pull[ok & (pull > 0.0)]
             sigma = self._mad_sigma(above) if above.size >= 2 else self._mad_sigma(pull[ok])
             if not np.isfinite(sigma) or sigma <= 0.0:
@@ -438,8 +437,7 @@ class NMFContinuum:
         Notes:
         - This correction is performed in observed space (same grid as flux).
         - The masking uses a robust sigma estimate (MAD) on (r - smooth_ratio).
-        - Pixels with ivar <= 0, non-finite flux/ivar, or non-positive continuum
-            are excluded from the correction.
+        - Pixels with ivar <= 0, non-finite flux/ivar, or non-positive continuum are excluded from the correction.
 
         Args:
             flux (np.ndarray): Observed flux array (nwave,).
@@ -486,9 +484,9 @@ class NMFContinuum:
         good = good0.copy()
         smooth = np.ones_like(cont0, dtype=float)
 
-        # Pre-masking: run a single coarse median filter pass on the raw ratio to
-        # identify absorption dips before the iterative loop begins.  This ensures
-        # that even iteration 0 does not feed absorber pixels into medfilt.
+        # Pre-masking: run a single coarse median filter pass on the raw ratio to identify absorption dips before the iterative
+        # loop begins.
+
         if (kernel_large is not None) and (kernel_large > 0):
             r_pre = self._neutral_fill(ratio)
             r_pre[~good0] = 1.0
@@ -509,7 +507,7 @@ class NMFContinuum:
 
             prev_good = good.copy()
 
-            # Fill masked/invalid pixels with 1.0 (neutral value) before medfilt
+            # Fill masked/invalid pixels with 1.0 before medfilt
             r_fill = self._neutral_fill(ratio)
             r_fill[~good] = 1.0
 
@@ -525,7 +523,7 @@ class NMFContinuum:
 
             smooth = r1 * r2
 
-            # Robust masking against narrow absorption spikes in ratio space
+            # Robust masking against narrow absorption features in ratio space
             delta = np.full_like(ratio, np.nan, dtype=float)
             ok = good0 & np.isfinite(ratio) & np.isfinite(smooth) & (smooth > 0)
             delta[ok] = ratio[ok] / smooth[ok] - 1.0
