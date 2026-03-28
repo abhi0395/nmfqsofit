@@ -299,6 +299,8 @@ def _parse_headers(args):
 
     headers["MAXITER"] = (maxiters_value, 'Maximum iteration for fitting (None means default as used solvers)')
     headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
+    headers["SIG_CLIP"] = (int(args.fit_nsigma), 'Sigma clipping (N) during fitting (N * sigma), to mask absorption pixels')
+    headers["FIT_ITER"] = (int(args.fit_niter), 'Number of itereations for sigma clipping during fitting')
 
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)

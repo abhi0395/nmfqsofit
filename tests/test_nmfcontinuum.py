@@ -102,7 +102,7 @@ class TestNMFContinuum(unittest.TestCase):
         self.assertEqual(out["final_cost"].shape, (n_take,))
         self.assertEqual(out["eigvector_range"].shape, (n_take,))
         self.assertEqual(out["norm_factor"].shape, (n_take,))
-        # z and related arrays may include an extra singleton dimension; only length is important
+        # z and related arrays may include an extra dimension; only length is important
         self.assertEqual(out["z"].shape[0], n_take)
         self.assertEqual(out["zmin"].shape[0], n_take)
         self.assertEqual(out["zmax"].shape[0], n_take)
@@ -154,7 +154,7 @@ class TestNMFContinuum(unittest.TestCase):
         self.assertEqual(out["final_cost"].shape, (n_take,))
         self.assertEqual(out["eigvector_range"].shape, (n_take,))
         self.assertEqual(out["norm_factor"].shape, (n_take,))
-        # account for possible singleton trailing dimension on z
+        # account for possible dimension on z
         self.assertEqual(out["z"].shape[0], n_take)
         self.assertEqual(out["zmin"].shape[0], n_take)
         self.assertEqual(out["zmax"].shape[0], n_take)

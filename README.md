@@ -32,7 +32,7 @@ nmfqsofit: Quasar Continuum Fitter
 - **Spectrum normalization & scaling** – Fits the normalized spectrum and automatically scales the continuum back to the observed frame  
 - **Flexible eigenvector interpolation** – Interpolates NMF eigenvectors to observed frame using user-provided interpolation kind (e.g., 'linear', 'cubic', 'nearest')  
 - **Multiple redshift-dependent eigenspectra support** – Handles multiple redshift bins with automatic selection based on quasar redshift  
-- **Automatic best-eigenset selection** – Selects the eigenset with minimum cost when multiple bins are valid  
+- **Automatic best-eigenset selection** – When multiple redshift bins overlap, selects the eigenset whose rest-frame wavelength range has the most valid observed pixels (maximum spectral coverage), rather than using chi2 which can be biased by absorption  
 - **Median filtering correction** – Applies iterative median-filter smoothing to the continuum to remove small and intermediate-scale calibration residuals  
 - **Efficient parallel processing** – Multiprocessing-based batch fitting optimized for HPC environments  
 - **Flexible eigenspectra loading** – Load from single FITS files or entire directories  
@@ -121,7 +121,7 @@ The pipeline automatically:
 - Fits using all matching redshift bins  
 - Use either NMF or NNLS method to find continuum coefficients
 - Performs efficient smoothing to improve reduced chi2
-- Chooses the solution with minimum cost (i.e. reduced chi2) 
+- Chooses the solution with maximum spectral coverage (valid pixel count within the eigenset's rest-frame range) 
 - Logs detailed information about loaded eigenspectra (redshift bins, wavelength ranges, number of components)
 ---
 
@@ -135,7 +135,7 @@ The pipeline automatically:
    - **Interpolate eigenvectors** – Interpolates eigenspectra from eigenspectra wavelength grid to observed wavelength grid using user-specified interpolation kind (linear, cubic, etc.).
    - **Fit coefficients** – Solves for NMF/NNLS coefficients on the normalized spectrum using `scipy.optimize.nnls` or `NonnegMFPy`. Pixels with low flux relative to the model (absorption troughs) are iteratively sigma-clipped so they cannot bias the fit downward. The sigma threshold is estimated from emission-side residuals only.
    - **Scale back to observed frame** – Reconstructs the continuum in observed frame using the fitted coefficients and interpolated eigenvectors.
-   - **Select best eigenset** – If multiple redshift bins are valid, automatically selects the eigenset with minimum $\chi^2$ cost.
+   - **Select best eigenset** – If multiple redshift bins are valid, selects the eigenset whose rest-frame wavelength range covers the most valid observed pixels. This is more robust than chi2-based selection, which is biased downward when absorption features are present (a continuum that traces absorbers has artificially low chi2). The coverage criterion directly reflects how well the data constrain the coefficients.
 4. **Apply median filtering correction** – Applies median-filter smoothing correction in the observed frame to remove intermediate and small-scale calibration residuals. Absorption dips are pre-masked via a coarse median filter and MAD sigma-clip before the iterative smoothing loop, preventing them from entering the filter. The smoothed continuum is kept only if it reduces the chi2 over all pixels; otherwise the original continuum is retained.
 5. **Save results** – Writes coefficients, continuum, fit statistics, and metadata to the output FITS file.
 6. **Logging** – All operations are logged with timestamps, function names, and line numbers.

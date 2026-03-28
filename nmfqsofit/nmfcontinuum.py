@@ -19,7 +19,7 @@ from .utils import interpolation1D
 from .logger import get_logger
 
 logger = get_logger(__name__)
-LARGE_CHI2 = 999999.0
+LARGE_CHI2 = 999999.0  #for failure cases
 
 @dataclass(frozen=True)
 class Eigenset:
@@ -276,7 +276,7 @@ class NMFContinuum:
             float: Reduced chi^2 value.
         """
         good = self.mask & np.isfinite(model_obs)
-        n = int(np.count_nonzero(good)) - n_comp
+        n = int(np.count_nonzero(good)) - n_comp  #degrees of freedome
         if n == 0:
             return np.inf
 
@@ -344,7 +344,7 @@ class NMFContinuum:
         return coeff, model
 
     def _run_solver(self, A_interp, flux_fit, ivar_fit, good):
-        """Dispatch to the configured solver (nnls or nmf)."""
+        """Run solver (nnls or nmf)."""
         if self.method == "nnls":
             return self._fit_coeff_nnls(A_interp, flux_fit, ivar_fit, good)
         return self._fit_coeff_nmf(A_interp, flux_fit, ivar_fit, good)
@@ -354,9 +354,9 @@ class NMFContinuum:
         Iterative sigma-rejection wrapper around the coefficient solver.
 
         Performs an initial fit, then repeats up to fit_niter rounds of
-        downward sigma rejection (absorption masking) followed by a refit.
+        absorption masking using sigma clipping followed by a refit.
         Only pixels with pull < -fit_nsigma * sigma are masked, so emission
-        features on the other side are never excluded.
+        features stay as they are.
 
         Args:
             A_interp (np.ndarray): Interpolated eigenspectra matrix (ncomp, nwave).
@@ -370,25 +370,28 @@ class NMFContinuum:
         good = mask_fit.copy()
         coeff, model = self._run_solver(A_interp, flux_fit, ivar_fit, good)
 
-        for _ in range(self.fit_niter):
-            # Normalized residuals (pull) at currently accepted pixels
+        for ntr in range(self.fit_niter):
+            # Normalized residuals at currently accepted pixels
             pull = np.full_like(flux_fit, np.nan)
             ok = good & np.isfinite(model) & (ivar_fit > 0)
             pull[ok] = (flux_fit[ok] - model[ok]) * np.sqrt(ivar_fit[ok])
 
-            # Estimate sigma from emission-side pixels only (pull > 0).
+            # Estimate sigma from emission-side pixels only.
 
             above = pull[ok & (pull > 0.0)]
             sigma = self._mad_sigma(above) if above.size >= 2 else self._mad_sigma(pull[ok])
             if not np.isfinite(sigma) or sigma <= 0.0:
                 break
 
-            # Mask only downward outliers (absorption pixels)
+            # Mask only potential absorption pixels
             new_good = good & np.where(np.isfinite(pull), pull > -self.fit_nsigma * sigma, True)
             n_changed = int(np.count_nonzero(new_good != good))
             good = new_good
 
+            logger.debug(f'fit_coeff_iterative iter={ntr}: sigma={sigma:.4f}, n_masked={n_changed}')
+
             if n_changed == 0:
+                logger.info(f'fit_coeff_iterative: converged (no new masked pixels) after iteration {ntr}')
                 break
 
             coeff, model = self._run_solver(A_interp, flux_fit, ivar_fit, good)
@@ -435,7 +438,7 @@ class NMFContinuum:
             continuum_final = first_continuum * smooth_ratio
 
         Notes:
-        - This correction is performed in observed space (same grid as flux).
+        - This correction is performed in observed frame (same grid as flux).
         - The masking uses a robust sigma estimate (MAD) on (r - smooth_ratio).
         - Pixels with ivar <= 0, non-finite flux/ivar, or non-positive continuum are excluded from the correction.
 
@@ -468,7 +471,7 @@ class NMFContinuum:
             if kernel_small % 2 == 0:
                 raise ValueError("kernel_small must be odd")
 
-        # Base validity mask
+        # Valid pixels mask
         good0 = (
             np.isfinite(self.flux)
             & np.isfinite(self.ivar)
@@ -477,15 +480,15 @@ class NMFContinuum:
             & (cont0 > 0.0)
         )
 
-        # Ratio in observed space
+        # Ratio in observed frame
         ratio = np.full_like(cont0, np.nan, dtype=float)
         ratio[good0] = self.flux[good0] / cont0[good0]
 
         good = good0.copy()
         smooth = np.ones_like(cont0, dtype=float)
 
-        # Pre-masking: run a single coarse median filter pass on the raw ratio to identify absorption dips before the iterative
-        # loop begins.
+        # Pre-masking: run a single coarse median filter pass on the raw ratio
+        # to identify absorption dips before the iterative loop begins.
 
         if (kernel_large is not None) and (kernel_large > 0):
             r_pre = self._neutral_fill(ratio)
@@ -523,7 +526,7 @@ class NMFContinuum:
 
             smooth = r1 * r2
 
-            # Robust masking against narrow absorption features in ratio space
+            # Robust masking against narrow absorption features in ratio
             delta = np.full_like(ratio, np.nan, dtype=float)
             ok = good0 & np.isfinite(ratio) & np.isfinite(smooth) & (smooth > 0)
             delta[ok] = ratio[ok] / smooth[ok] - 1.0
@@ -564,7 +567,8 @@ class NMFContinuum:
             "zmax": None,
             "norm": None,
             "n_comp": None,
-            "method": self.method
+            "method": self.method,
+            "coverage": -1,
         }
 
         # Keep observed arrays fixed (do not mutate self.flux/ivar)
@@ -591,6 +595,12 @@ class NMFContinuum:
                 lam_max_obs=lam_max_obs,
                 stat=stat,
             )
+
+            # Coverage: valid pixels within the eigenset's observed-frame wavelength range
+            obs_min = eig.rest_wave.min() * (1.0 + self.z)
+            obs_max = eig.rest_wave.max() * (1.0 + self.z)
+            mask_coverage = np.isfinite(self.flux) & np.isfinite(self.ivar) & (self.ivar > 0) & (self.wave >= obs_min) & (self.wave <= obs_max)
+            coverage = int(np.count_nonzero(mask_coverage))
 
             # Skip if norm is not usable
             if (not np.isfinite(norm)) or (norm <=0.0):
@@ -625,7 +635,7 @@ class NMFContinuum:
                 cost = first_cost
                 cont_obs = first_cont_obs.copy()
 
-            if cost < best["final_cost"]:
+            if coverage > best["coverage"]:
                 best.update(
                     {
                         "final_cost": cost,
@@ -636,7 +646,8 @@ class NMFContinuum:
                         "zmin": zmin,
                         "zmax": zmax,
                         "norm": norm,
-                        "n_comp": n_comp
+                        "n_comp": n_comp,
+                        "coverage": coverage,
                     }
                 )
 
@@ -645,7 +656,7 @@ class NMFContinuum:
             first_eig = next(iter(self.eigenspectra_dict.values()))
             ncomp = first_eig['eigvec'].shape[0] if isinstance(first_eig, dict) else first_eig.eigvec.shape[0]
 
-            # Initialize all outputs with zero values
+            # Initialize all outputs with zero values and chi2 would be very large for failure cases
             best["coefficients"] = np.zeros(ncomp)
             best["first_continuum"] = np.zeros(self.wave.size)
             best["continuum"] = np.zeros(self.wave.size)

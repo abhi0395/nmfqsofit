@@ -140,9 +140,9 @@ def main():
     if args.config:
         with open(args.config, 'r') as f:
             config = yaml.safe_load(f)
-        # Apply config values to args
+        # Apply config values to args (normalize hyphens to underscores to match argparse)
         for key, value in config.items():
-            setattr(args, key, value)
+            setattr(args, key.replace('-', '_'), value)
 
     # Validate that required arguments are present
     required_args = ['spectra_file', 'eigenspectra', 'output']
