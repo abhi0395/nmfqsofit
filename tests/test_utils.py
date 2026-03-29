@@ -189,6 +189,9 @@ class TestParseHeaders(unittest.TestCase):
         args.kernel_small = 71
         args.maxiters = 100
         args.smoothing_niter = 3
+        args.fit_nsigma = 3
+        args.fit_niter = 3
+        args.smooth_nsigma = 3.0
         return args
 
     def test_basic_parse(self):
@@ -197,7 +200,7 @@ class TestParseHeaders(unittest.TestCase):
         self.assertEqual(result["SURVEY"], "SDSS")
         self.assertEqual(result["RELEASE"], "DR16")
         self.assertIn("METHOD", result)
-        self.assertIn("EIGSPEC", result)
+        self.assertIn("EIGENVEC", result)
 
     def test_invalid_header_no_equals_raises(self):
         args = self._make_args(headers=["BADHEADER"])

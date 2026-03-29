@@ -33,6 +33,13 @@ def main():
     parser = argparse.ArgumentParser(description="NMF Continuum Estimation (Parallel)")
 
     parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="YAML config file with all arguments. If provided, values from this file override all command-line arguments (including explicitly provided ones)..",
+    )
+
+    parser.add_argument(
         "--spectra-file",
         type=str,
         required=False,
@@ -50,8 +57,8 @@ def main():
     parser.add_argument(
         "--ncpus",
         type=int,
-        default=8,
-        help="Number of CPU processes to use (default: 8).",
+        default=4,
+        help="Number of CPU processes to use (default: 4).",
     )
     parser.add_argument(
         "--n-qso",
@@ -68,7 +75,13 @@ def main():
         "--kernel-size",
         type=int,
         default=141,
-        help="Median filter kernel size (odd integer; default: 141).",
+        help="Median filter kernel size for intermediate-scale smoothing (odd integer; default: 141).",
+    )
+    parser.add_argument(
+        "--kernel-small",
+        type=int,
+        default=71,
+        help="Median filter kernel size for small-scale smoothing (odd integer; default: 71, half of --kernel-size, rounded up to odd).",
     )
     parser.add_argument(
         "--method",
@@ -101,6 +114,27 @@ def main():
     )
 
     parser.add_argument(
+        "--fit-niter",
+        type=int,
+        default=3,
+        help="number of sigma-rejection iterations during coefficient fitting (default 3; set to 0 for no rejection).",
+    )
+
+    parser.add_argument(
+        "--fit-nsigma",
+        type=float,
+        default=3.0,
+        help="sigma threshold for absorption masking during coefficient fitting (default 3.0)",
+    )
+
+    parser.add_argument(
+        "--smooth-nsigma",
+        type=float,
+        default=1.5,
+        help="sigma threshold for absorption masking during smoothing correction (default 1.5)",
+    )
+
+    parser.add_argument(
         "--output",
         type=str,
         required=False,
@@ -110,14 +144,8 @@ def main():
         "--headers",
         type=str,
         nargs="+",
-        default=None,
+        default=[],
         help="Extra FITS headers to include in KEY=VALUE format.",
-    )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default=None,
-        help="YAML config file with all arguments. If provided, command-line arguments are ignored.",
     )
 
     args = parser.parse_args()
@@ -126,9 +154,9 @@ def main():
     if args.config:
         with open(args.config, 'r') as f:
             config = yaml.safe_load(f)
-        # Apply config values to args
+        # Apply config values to args (normalize hyphens to underscores to match argparse)
         for key, value in config.items():
-            setattr(args, key, value)
+            setattr(args, key.replace('-', '_'), value)
 
     # Validate that required arguments are present
     required_args = ['spectra_file', 'eigenspectra', 'output']
@@ -140,15 +168,15 @@ def main():
     # Setup logging
     logger = setup_logger("nmfqsofit", level=logging.INFO)
 
-    args.kernel_small = int(args.kernel_size / 2)
+    if args.kernel_small is None:
+        args.kernel_small = int(args.kernel_size / 2)
+        if args.kernel_small % 2 == 0:
+            args.kernel_small += 1  # ensure odd
 
-    if args.kernel_small %2 == 0:
-        args.kernel_small+=1 # just make it odd
-
-    logger.info("==== USER PROVIDED ARGUMENTS ====")
+    logger.info("\n==== USER PROVIDED ARGUMENTS ====\n")
     for key, value in vars(args).items():
         logger.info(f"{key}: {value}")
-    logger.info("================================")
+    logger.info("\n================================\n")
 
     # Determine number/selection of QSOs
     if args.n_qso is None:
@@ -202,7 +230,10 @@ def main():
             n_jobs=n_jobs,
             maxiters=args.maxiters,
             interp_kind=args.interp_kind,
-            smoothing_niter=args.smoothing_niter
+            smoothing_niter=args.smoothing_niter,
+            fit_niter=args.fit_niter,
+            fit_nsigma=args.fit_nsigma,
+            smooth_nsigma=args.smooth_nsigma,
         )
     )
 

@@ -25,7 +25,7 @@ setup(
     },
     author='Abhijeet Anand',
     author_email='abhijeetanand2011@gmail.com',
-    description='Nonnegative matrix factorization based continuum fitting for Quasars using vectorized NMF module or NNLS methods',
+    description='Quasar continuum fitter using vectorized NMF module or NNLS method, with parallel processing support.',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     url='https://github.com/abhi0395/nmfqsofit',
@@ -34,5 +34,5 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.9',
+    python_requires='>=3.10',
 )

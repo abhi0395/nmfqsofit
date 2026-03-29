@@ -19,27 +19,25 @@
 nmfqsofit: Quasar Continuum Fitter
 ============
 
-**An Efficient, Fast, and Reliable Automated Continuum Fitter for Low-Resolution Quasar Spectra Using Non-negative Matrix Factorization (NMF)**
-
-`nmfqsofit` is a fast, modular, and scalable Python package for estimating quasar continua using precomputed NMF eigenspectra. It supports both NNLS-based fitting vectorized NMF coefficient estimation, works with SDSS/DESI/4MOST/WEAVE-like spectra, and is designed for large spectroscopic surveys and HPC environments.
+`nmfqsofit` is a Python package for estimating quasar continua using precomputed Nonnegative matrix factorization (NMF) eigenspectra. It supports both Nonnegative least square (NNLS) and NMF coefficient fitting. It is generic enough to work with any kind of spectra. Though it has been currently only tested on large spectroscopic surveys like SDSS and DESI. It is well designed for both local and HPC environments.
 
 ---
 
 ## Features
 
-- **NMF-based quasar continuum modeling** – Fits coefficients using Non-negative Matrix Factorization (slower)
-- **NNLS alternative** – Optionally use Non-Negative Least Squares for coefficient fitting (faster)
+- **NMF-based quasar continuum modeling** – Fits coefficients using Nonnegative Matrix Factorization (slower)
+- **NNLS alternative** – Optionally use Nonnegative Least Squares for coefficient fitting (faster)
+- **Iterative absorption rejection** – During coefficient fitting, pixels with low flux (absorption troughs) are iteratively sigma-clipped so they do not pull the continuum downward
 - **Spectrum normalization & scaling** – Fits the normalized spectrum and automatically scales the continuum back to the observed frame  
 - **Flexible eigenvector interpolation** – Interpolates NMF eigenvectors to observed frame using user-provided interpolation kind (e.g., 'linear', 'cubic', 'nearest')  
 - **Multiple redshift-dependent eigenspectra support** – Handles multiple redshift bins with automatic selection based on quasar redshift  
-- **Automatic best-eigenset selection** – Selects the eigenset with minimum cost when multiple bins are valid  
-- **Median filtering flexibility** – Performs iterative smoothing on continuum model to improve reduced chi2 by removing small and intermediate scale fluctuations  
-- **Comprehensive logging framework** – Structured logging with python log levels for observability  
+- **Automatic best-eigenset selection** – When multiple redshift bins overlap, selects the eigenset whose rest-frame wavelength range has the most valid observed pixels (maximum spectral coverage), rather than using chi2 which can be biased by absorption  
+- **Median filtering correction** – Applies iterative median-filter smoothing to the continuum to remove small and intermediate-scale calibration residuals  
 - **Efficient parallel processing** – Multiprocessing-based batch fitting optimized for HPC environments  
 - **Flexible eigenspectra loading** – Load from single FITS files or entire directories  
-- **Clean FITS I/O** – Well-structured input/output with validated HDU structure  
-- **Modular and extensible design** – Clear separation of concerns for easy extension  
+- **Clean FITS I/O** – Out of the box functions for input/output files with validated HDU structure  
 - **Unit tests included** – pytest-based test suite with integration tests 
+- **Logging** – All operations are logged with timestamps, function names, and line numbers.
 
 ---
 
@@ -53,7 +51,7 @@ nmfqsofit: Quasar Continuum Fitter
 
 ## Requirements
 
-- Python >= 3.9
+- Python >= 3.10
 - numpy
 - scipy
 - astropy
@@ -99,7 +97,7 @@ nmfqsofit --help
 
 The NMF eigenspectra are maintained in a separate [repository](https://github.com/abhi0395/nmfeigenspectra). This keeps the eigenspectra data independent from the `nmfqsofit` codebase, allowing both to evolve separately. Currently, the repository provides eigenspectra built from **SDSS DR14** and **DESI DR1** quasar spectra only. In the future, eigenspectra from additional surveys (e.g., 4MOST, WEAVE, HST, WAVES) will be added.
 
-Before running `nmfqsofit`, download the eigenspectra repository. It is recommeded to use tagged version to ensure reproducibility. 
+Before running `nmfqsofit`, download the eigenspectra repository. It is recommended to use **tagged** version to ensure reproducibility. 
 
 ```bash
 git clone https://github.com/abhi0395/nmfeigenspectra.git
@@ -122,7 +120,7 @@ The pipeline automatically:
 - Fits using all matching redshift bins  
 - Use either NMF or NNLS method to find continuum coefficients
 - Performs efficient smoothing to improve reduced chi2
-- Chooses the solution with minimum cost (i.e. reduced chi2) 
+- Chooses the solution with maximum spectral coverage (valid pixel count within the eigenset's rest-frame range) 
 - Logs detailed information about loaded eigenspectra (redshift bins, wavelength ranges, number of components)
 ---
 
@@ -132,14 +130,15 @@ The pipeline automatically:
 2. **Load eigenspectra** – Loads NMF eigenspectra from a directory or single file. Eigenspectra are organized by redshift bins and wavelength ranges.
 3. **For each quasar**:
    - **Identify matching redshift bins** – Selects eigenspectra with redshift bins encompassing the quasar's redshift.
-   - **Normalize spectrum** – Normalizes the observed spectrum to a reference continuum level.
+   - **Normalize spectrum** – Normalizes the observed spectrum to a reference continuum level using header keywords in eigenspectra.
    - **Interpolate eigenvectors** – Interpolates eigenspectra from eigenspectra wavelength grid to observed wavelength grid using user-specified interpolation kind (linear, cubic, etc.).
-   - **Fit coefficients** – Solves for NMF/NNLS coefficients on the normalized spectrum using scipy.optimize.nnls or NonnegMFPy.
+   - **Fit coefficients** – Solves for NMF/NNLS coefficients on the normalized spectrum using `scipy.optimize.nnls` or `NonnegMFPy`. Pixels with low flux relative to the model (absorption troughs) are iteratively sigma-clipped so they cannot bias the fit downward. The sigma threshold is estimated from emission-side residuals only.
    - **Scale back to observed frame** – Reconstructs the continuum in observed frame using the fitted coefficients and interpolated eigenvectors.
-   - **Select best eigenset** – If multiple redshift bins are valid, automatically selects the eigenset with minimum chi2 cost.
-4. **Apply median filtering correction** – Applies median-filter smoothing correction in the observed frame to remove intermediate and small scale continuum fluctuations.
-5. **Save results** – Writes coefficients, continuum, fit statistics, and metadata to output FITS file.
-6. **Comprehensive logging** – All operations are logged with timestamps, function names, and line numbers for debugging and monitoring.
+   - **Select best eigenset** – If multiple redshift bins are valid, selects the eigenset whose rest-frame wavelength range covers the most valid observed pixels. This is more robust than chi2-based selection, which is biased downward when absorption features are present (a continuum that traces absorbers has artificially low chi2). The coverage criterion directly reflects how well the data constrain the coefficients.
+4. **Apply median filtering correction** – Applies median-filter smoothing correction in the observed frame to remove intermediate and small-scale calibration residuals. Absorption dips are pre-masked via MAD sigma-clip before the iterative smoothing loop, preventing them from entering the filter. The smoothed continuum is kept only if it reduces the chi2 over all pixels; otherwise the original continuum is retained.
+5. **Save results** – Writes coefficients, continuum, fit statistics, and metadata to the output FITS file.
+6. **Logging** – All operations are logged with timestamps, function names, and line numbers.
+
 
 ---
 
@@ -167,6 +166,7 @@ nmfqsofit \
   --spectra-file data/test_sdss_spectra.fits \
   --eigenspectra /path/to/nmfeigenspectra/sdss \
   --kernel-size 141 \
+  --kernel-small 71 \
   --method nnls \
   --interp-kind linear \
   --ncpus 8 \
@@ -182,22 +182,31 @@ nmfqsofit --config config_example.yml
 ## config.yml file will contain all the user-defined arguments to run the script
 ```
 
+> **Important — override precedence:** when `--config` is provided, **every key in the YAML file overwrites the corresponding CLI argument**, including values you explicitly passed on the command line. CLI arguments only take effect for keys that are *absent* from the config file. To mix both, omit a key from the YAML and pass it on the command line instead.
+
 See `config_example.yml` file to see how a parameter config file will look like.
 
 
 ### Options
 
-- `--spectra-file`: Input FITS file with FLUX, IVAR, WAVELENGTH, and METADATA (with Z column)
-- `--eigenspectra`: Directory or single FITS file containing NMF eigenspectra
-- `--kernel-size`: Median filter kernel size for smoothing correction (default: 71)
-- `--method`: Fitting method – `nnls` (Non-Negative Least Squares) or `nmf` (Non-negative Matrix Factorization; default: `nnls`)
-- `--interp-kind`: Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.; default: `linear`)
-- `--ncpus`: Number of CPU processes for parallel fitting (default: 8)
-- `--maxiters`: Maximum iterations for NMF or NNLS solver (default: 200)
-- `--smoothing-niter`: number of maximum iteration for median filtering (default 3)
-- `--n-qso`: Number of QSOs to process – can be an integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`)
-- `--output`: Output FITS filename
-- `--headers`: Optional FITS header keywords (e.g., `AUTHOR=Name SURVEY=Mission`)
+| CLI argument | Required / Optional | Description |
+|---|---|---|
+| `--config` | Optional | Path to a YAML config file; values override all other CLI arguments |
+| `--spectra-file` | Required | Input FITS file with FLUX, IVAR, WAVELENGTH, and METADATA (with Z column) |
+| `--eigenspectra` | Required | Directory or single FITS file containing NMF eigenspectra |
+| `--output` | Required | Output FITS filename |
+| `--method` | Optional | Fitting method: `nnls` (Non-Negative Least Squares) or `nmf` (Non-negative Matrix Factorization); default: `nnls` |
+| `--interp-kind` | Optional | Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.); default: `linear` |
+| `--kernel-size` | Optional | Median filter kernel size for intermediate-scale smoothing correction (odd integer); default: `141` |
+| `--kernel-small` | Optional | Median filter kernel size for small-scale smoothing correction (odd integer); default: half of `--kernel-size` rounded up to the nearest odd integer |
+| `--ncpus` | Optional | Number of CPU processes for parallel fitting; default: `4` |
+| `--maxiters` | Optional | Maximum iterations for NMF or NNLS solver; default: `200` |
+| `--smoothing-niter` | Optional | Maximum iterations for median filtering; default: `3` |
+| `--fit-niter` | Optional | Number of iterative sigma-rejection passes during coefficient fitting; default: `3` (set to `0` to disable) |
+| `--fit-nsigma` | Optional | Downward sigma threshold for absorption rejection during coefficient fitting; default: `3.0` |
+| `--smooth-nsigma` | Optional | Downward sigma threshold for absorption masking during smoothing correction; default: `3.0` |
+| `--n-qso` | Optional | Number of QSOs to process – integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`) |
+| `--headers` | Optional | Extra FITS header keywords to write (e.g., `AUTHOR=Name SURVEY=Survey`) |
 
 ### Using NMF (instead of NNLS)
 Replace `--method nnls` with `--method nmf`.
@@ -276,7 +285,7 @@ Contributions are welcome! Please submit a pull request or open an issue to disc
 Acknowledgements
 -----------
 
-The first crude version of the code was developed and written by me during my PhD with lots of suggestions from my PhD supervisors [Prof. Dr. Guinevere Kauffmann](https://www.mpa-garching.mpg.de/person/44092) and [Dr. Dylan Nelson](https://nelson.tng-project.org/). Over the years, it has evolved from a specialized script into the generic, community-ready framework it is today. I would like to extend my thanks to the VS Code AI agents, which were instrumental in refining the codebase. They provided invaluable assistance in documenting functions, logging details, optimizing logic, and expanding unit test coverage, helping to ensure the code is both robust and maintainable. The project logo was created from a continuum example generated by me, with assistance from ChatGPT-5.3.
+The first crude version of the code was developed and written by me during my PhD with lots of suggestions from my PhD supervisors [Prof. Dr. Guinevere Kauffmann](https://www.mpa-garching.mpg.de/person/44092) and [Dr. Dylan Nelson](https://nelson.tng-project.org/). Over the years, it has evolved from a specialized script into the generic, community-ready framework it is today. I would like to extend my thanks to the VS Code AI agents, which were instrumental in refining the codebase. They provided invaluable assistance in documenting functions, logging details, optimizing logic, and expanding unit test coverage, helping to ensure the code is both robust and maintainable. The project logo was created from a continuum example generated by me using ChatGPT.
 
 License
 -------

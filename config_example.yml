@@ -1,7 +1,11 @@
 # Example YAML config file for nmfqsofit
 # Copy this file, update the paths and parameters, then run:
-
+#
 #  nmfqsofit --config your_config.yml
+#
+# IMPORTANT — override precedence:
+#   Every key present in this file OVERWRITES the corresponding CLI argument,
+#   CLI arguments only take effect for keys that are absent from this file.
 ################################
 
 spectra_file: /path/to/spectra.fits
@@ -15,6 +19,10 @@ kernel_size: 141
 method: nnls  # options: "nnls" or "nmf"
 maxiters: 200
 interp_kind: linear
+fit_niter: 3       # sigma-rejection iterations during coefficient fitting (0 = no rejection)
+fit_nsigma: 3.0    # sigma threshold for absorption masking during coefficient fitting
+smooth_nsigma: 3.0 # sigma threshold for absorption masking during smoothing correction
+kernel_small: null # small-scale median filter kernel (null = auto: half of kernel_size, rounded up to odd)
 
 # Optional headers as list
 headers:
