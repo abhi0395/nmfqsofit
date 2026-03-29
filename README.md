@@ -9,7 +9,6 @@
 
 [![github shields.io](https://img.shields.io/badge/GitHub-abhi0395%2Fnmfqsofit-blue.svg?style=flat)](https://github.com/abhi0395/nmfqsofit)
 [![github shields.io](https://img.shields.io/badge/GitHub-abhi0395%2Fnmfeigenspectra-pink.svg?style=flat)](https://github.com/abhi0395/nmfeigenspectra)
-[![arXiv-2504.20299](http://img.shields.io/badge/arXiv-2504.20299-orange.svg?style=flat)](https://arxiv.org/abs/2504.20299)
 [![arXiv-2103.15842](http://img.shields.io/badge/arXiv-2103.15842-orange.svg?style=flat)](https://arxiv.org/abs/2103.15842)
 [![arXiv-1612.06037](http://img.shields.io/badge/arXiv-1612.06037-orange.svg?style=flat)](https://arxiv.org/abs/1612.06037)
 [![codecov](https://codecov.io/gh/abhi0395/nmfqsofit/graph/badge.svg)](https://codecov.io/gh/abhi0395/nmfqsofit)
@@ -98,7 +97,7 @@ nmfqsofit --help
 
 The NMF eigenspectra are maintained in a separate [repository](https://github.com/abhi0395/nmfeigenspectra). This keeps the eigenspectra data independent from the `nmfqsofit` codebase, allowing both to evolve separately. Currently, the repository provides eigenspectra built from **SDSS DR14** and **DESI DR1** quasar spectra only. In the future, eigenspectra from additional surveys (e.g., 4MOST, WEAVE, HST, WAVES) will be added.
 
-Before running `nmfqsofit`, download the eigenspectra repository. It is recommeded to use tagged version to ensure reproducibility. 
+Before running `nmfqsofit`, download the eigenspectra repository. It is recommeded to use **tagged** version to ensure reproducibility. 
 
 ```bash
 git clone https://github.com/abhi0395/nmfeigenspectra.git
@@ -131,12 +130,12 @@ The pipeline automatically:
 2. **Load eigenspectra** – Loads NMF eigenspectra from a directory or single file. Eigenspectra are organized by redshift bins and wavelength ranges.
 3. **For each quasar**:
    - **Identify matching redshift bins** – Selects eigenspectra with redshift bins encompassing the quasar's redshift.
-   - **Normalize spectrum** – Normalizes the observed spectrum to a reference continuum level.
+   - **Normalize spectrum** – Normalizes the observed spectrum to a reference continuum level using header keywords in eigenspectra.
    - **Interpolate eigenvectors** – Interpolates eigenspectra from eigenspectra wavelength grid to observed wavelength grid using user-specified interpolation kind (linear, cubic, etc.).
    - **Fit coefficients** – Solves for NMF/NNLS coefficients on the normalized spectrum using `scipy.optimize.nnls` or `NonnegMFPy`. Pixels with low flux relative to the model (absorption troughs) are iteratively sigma-clipped so they cannot bias the fit downward. The sigma threshold is estimated from emission-side residuals only.
    - **Scale back to observed frame** – Reconstructs the continuum in observed frame using the fitted coefficients and interpolated eigenvectors.
    - **Select best eigenset** – If multiple redshift bins are valid, selects the eigenset whose rest-frame wavelength range covers the most valid observed pixels. This is more robust than chi2-based selection, which is biased downward when absorption features are present (a continuum that traces absorbers has artificially low chi2). The coverage criterion directly reflects how well the data constrain the coefficients.
-4. **Apply median filtering correction** – Applies median-filter smoothing correction in the observed frame to remove intermediate and small-scale calibration residuals. Absorption dips are pre-masked via a coarse median filter and MAD sigma-clip before the iterative smoothing loop, preventing them from entering the filter. The smoothed continuum is kept only if it reduces the chi2 over all pixels; otherwise the original continuum is retained.
+4. **Apply median filtering correction** – Applies median-filter smoothing correction in the observed frame to remove intermediate and small-scale calibration residuals. Absorption dips are pre-masked via MAD sigma-clip before the iterative smoothing loop, preventing them from entering the filter. The smoothed continuum is kept only if it reduces the chi2 over all pixels; otherwise the original continuum is retained.
 5. **Save results** – Writes coefficients, continuum, fit statistics, and metadata to the output FITS file.
 6. **Logging** – All operations are logged with timestamps, function names, and line numbers.
 
@@ -174,6 +173,7 @@ See `config_example.yml` file to see how a parameter config file will look like.
 
 | CLI argument | Required / Optional | Description |
 |---|---|---|
+| `--config` | Optional | Path to a YAML config file; values override all other CLI arguments |
 | `--spectra-file` | Required | Input FITS file with FLUX, IVAR, WAVELENGTH, and METADATA (with Z column) |
 | `--eigenspectra` | Required | Directory or single FITS file containing NMF eigenspectra |
 | `--output` | Required | Output FITS filename |
@@ -183,11 +183,10 @@ See `config_example.yml` file to see how a parameter config file will look like.
 | `--ncpus` | Optional | Number of CPU processes for parallel fitting; default: `4` |
 | `--maxiters` | Optional | Maximum iterations for NMF or NNLS solver; default: `200` |
 | `--smoothing-niter` | Optional | Maximum iterations for median filtering; default: `3` |
-| `--fit-niter` | Optional | Number of iterative sigma-rejection passes during coefficient fitting; default: `1` (set to `0` to disable) |
+| `--fit-niter` | Optional | Number of iterative sigma-rejection passes during coefficient fitting; default: `3` (set to `0` to disable) |
 | `--fit-nsigma` | Optional | Downward sigma threshold for absorption rejection during fitting; default: `3.0` |
 | `--n-qso` | Optional | Number of QSOs to process – integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`) |
-| `--headers` | Optional | Extra FITS header keywords to write (e.g., `AUTHOR=Name SURVEY=Mission`) |
-| `--config` | Optional | Path to a YAML config file; values override all other CLI arguments |
+| `--headers` | Optional | Extra FITS header keywords to write (e.g., `AUTHOR=Name SURVEY=Survey`) |
 
 ### Using NMF (instead of NNLS)
 Replace `--method nnls` with `--method nmf`.
@@ -252,7 +251,7 @@ Citations
 
 If you use this code, please cite:
 
-- [Anand et al. 2025](https://arxiv.org/abs/2504.20299), Description of **nmfqsofit** and DESI DR1 continuum
+- [Anand et al. 2026 (in prep.)](https://github.com/abhi0395/nmfqsofit), Description of **nmfqsofit** and DESI DR1 continuum
 - [Anand et al. 2021](https://arxiv.org/abs/2103.15842), SDSS DR14 Eigenspectra
 - [Zhu 2016](https://arxiv.org/abs/1612.06037), Vectorized NMF implementation
 

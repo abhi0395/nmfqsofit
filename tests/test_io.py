@@ -434,17 +434,10 @@ class TestContinuumSpec(unittest.TestCase):
             spec.read_fits()
 
     def test_verbose_prints_timing(self):
-        import io as _io
-        import sys
-        captured = _io.StringIO()
-        old_out = sys.stdout
-        sys.stdout = captured
-        try:
+        import logging
+        with self.assertLogs("nmfqsofit.io", level="INFO") as cm:
             spec = ContinuumSpec(self.path, autoload=True, verbose=True)
-        finally:
-            sys.stdout = old_out
-        output = captured.getvalue()
-        self.assertIn("Time taken", output)
+        self.assertTrue(any("Time taken" in msg for msg in cm.output))
 
     def test_with_index(self):
         spec = ContinuumSpec(self.path, index=0, autoload=True, verbose=False)

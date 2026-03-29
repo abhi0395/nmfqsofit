@@ -282,8 +282,8 @@ def _parse_headers(args):
                 versions[pkg] = 'not installed'
 
     headers["METHOD"] = (str(args.method) , 'Fitting Method')
-    headers["EIGSPEC"] = (str(args.eigenspectra) , 'Eigenvector directory')
-    headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing intermediate fluctuation')
+    headers["EIGENVEC"] = (str(args.eigenspectra))
+    headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing large fluctuation')
     headers["KERN_II"] = (int(args.kernel_small), 'kernel size for removing small fluctuation')
 
     # while still validating other invalid values with a clear error.
@@ -297,10 +297,10 @@ def _parse_headers(args):
                 f"Invalid value for maxiters: {args.maxiters!r}. Expected an integer or null."
             ) from exc
 
-    headers["MAXITER"] = (maxiters_value, 'Maximum iteration for fitting (None means default as used solvers)')
+    headers["MAXITER"] = (maxiters_value, 'Maximum iteration for solver fitting')
     headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
-    headers["SIG_CLIP"] = (int(args.fit_nsigma), 'Sigma clipping (N) during fitting (N * sigma), to mask absorption pixels')
-    headers["FIT_ITER"] = (int(args.fit_niter), 'Number of itereations for sigma clipping during fitting')
+    headers["SIG_CLIP"] = (int(args.fit_nsigma), 'Sigma clipping  (N * sigma), to mask absorption')
+    headers["FIT_ITER"] = (int(args.fit_niter), 'Number of itereations for sigma clipping')
 
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)

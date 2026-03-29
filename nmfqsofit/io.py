@@ -1,6 +1,7 @@
 """
 This script contains functions to read, append and write fits files.
 """
+from fileinput import filename
 import os
 import re
 import time
@@ -188,9 +189,6 @@ def write_continuum(
     )
     hdul.writeto(str(filename), overwrite=True)
 
-    logger.info(f"Data written to {filename}")
-    elapsed_time = time.time() - start_time
-    logger.info(f"Time taken to write {filename}: {elapsed_time:.2f} s")
 
 class QSOSpecRead:
     """
@@ -233,7 +231,8 @@ class QSOSpecRead:
             self.fits_file, self.index
         )
         if self.verbose:
-            elapsed(start_time, f"Time taken to read {self.fits_file}", use_logger=True)
+            elapsed_time = time.time() - start_time
+            logger.info(f"Time taken to read {self.fits_file}: {elapsed_time:.2f} s")
 
 
 def load_all_eigenspectra(data_path):
@@ -273,6 +272,7 @@ def load_all_eigenspectra(data_path):
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Path not found: {data_path}")
 
+    start_time = time.time()
     data_path = Path(data_path)
 
     # Determine if path is a file or directory
@@ -327,9 +327,10 @@ def load_all_eigenspectra(data_path):
     if len(nmf_dict) == 0:
         raise ValueError(f"No eigenspectra FITS files loaded from {data_path}")
 
+    elapsed_time = time.time() - start_time
     logger.info(
         f"Successfully loaded {files_loaded} eigenspectra file(s) with {len(nmf_dict)} "
-        f"redshift bins"
+        f"redshift bins. Time took: {elapsed_time:.2f} s"
     )
 
     return nmf_dict
@@ -468,5 +469,5 @@ class ContinuumSpec:
 
         if self.verbose:
             elapsed_time = time.time() - start_time
-            print(f"INFO: Time taken to read {self.fits_file}: {elapsed_time:.2f} s")
+            logger.info(f"Time taken to read {self.fits_file}: {elapsed_time:.2f} s")
 

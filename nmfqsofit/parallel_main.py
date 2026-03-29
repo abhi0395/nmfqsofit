@@ -33,6 +33,13 @@ def main():
     parser = argparse.ArgumentParser(description="NMF Continuum Estimation (Parallel)")
 
     parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="YAML config file with all arguments. If provided, command-line arguments are ignored.",
+    )
+
+    parser.add_argument(
         "--spectra-file",
         type=str,
         required=False,
@@ -127,12 +134,6 @@ def main():
         default=None,
         help="Extra FITS headers to include in KEY=VALUE format.",
     )
-    parser.add_argument(
-        "--config",
-        type=str,
-        default=None,
-        help="YAML config file with all arguments. If provided, command-line arguments are ignored.",
-    )
 
     args = parser.parse_args()
 
@@ -159,10 +160,10 @@ def main():
     if args.kernel_small %2 == 0:
         args.kernel_small+=1 # just make it odd
 
-    logger.info("==== USER PROVIDED ARGUMENTS ====")
+    logger.info("\n==== USER PROVIDED ARGUMENTS ====\n")
     for key, value in vars(args).items():
         logger.info(f"{key}: {value}")
-    logger.info("================================")
+    print("\n================================\n")
 
     # Determine number/selection of QSOs
     if args.n_qso is None:
