@@ -277,7 +277,7 @@ class NMFContinuum:
         """
         good = self.mask & np.isfinite(model_obs)
         n = int(np.count_nonzero(good)) - n_comp  #degrees of freedome
-        if n == 0:
+        if n <= 0:
             return np.inf
 
         diff = self.flux[good] - model_obs[good]
@@ -617,8 +617,12 @@ class NMFContinuum:
             # Fit coefficients in normalized space (with iterative absorption rejection)
             try:
                 coeff, first_cont_norm = self._fit_coeff_iterative(A_interp, flux_fit, ivar_fit, mask_fit)
-            except Exception:
-                continue
+            except Exception as exc:
+                logger.exception(
+                    "Exception during coefficient fitting at z=%.4f for eigenset "
+                    "z[%.2f, %.2f) lam[%.1f, %.1f] stat=%s; skipping this configuration",
+                    self.z, zmin, zmax, lam_min, lam_max, stat
+                )
 
             # Scale first-pass continuum back to OBSERVED units
             first_cont_obs = first_cont_norm * norm
@@ -635,7 +639,7 @@ class NMFContinuum:
                 cost = first_cost
                 cont_obs = first_cont_obs.copy()
 
-            if coverage > best["coverage"]:
+            if coverage >= best["coverage"]:
                 best.update(
                     {
                         "final_cost": cost,

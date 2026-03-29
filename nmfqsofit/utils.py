@@ -282,7 +282,7 @@ def _parse_headers(args):
                 versions[pkg] = 'not installed'
 
     headers["METHOD"] = (str(args.method) , 'Fitting Method')
-    headers["EIGENVEC"] = (str(args.eigenspectra))
+    headers["EIGENVEC"] = (str(args.eigenspectra), 'Eigenvector (eigenspectra) configuration')
     headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing large fluctuation')
     headers["KERN_II"] = (int(args.kernel_small), 'kernel size for removing small fluctuation')
 
@@ -299,8 +299,8 @@ def _parse_headers(args):
 
     headers["MAXITER"] = (maxiters_value, 'Maximum iteration for solver fitting')
     headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
-    headers["SIG_CLIP"] = (int(args.fit_nsigma), 'Sigma clipping  (N * sigma), to mask absorption')
-    headers["FIT_ITER"] = (int(args.fit_niter), 'Number of itereations for sigma clipping')
+    headers["SIG_CLIP"] = (float(args.fit_nsigma), 'Sigma clipping  (N * sigma), to mask absorption')
+    headers["FIT_ITER"] = (int(args.fit_niter), 'Number of iterations for sigma clipping')
 
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)

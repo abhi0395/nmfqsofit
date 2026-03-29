@@ -36,7 +36,7 @@ def main():
         "--config",
         type=str,
         default=None,
-        help="YAML config file with all arguments. If provided, command-line arguments are ignored.",
+        help="YAML config file with all arguments. If provided, config values override CLI defaults.",
     )
 
     parser.add_argument(
@@ -58,7 +58,7 @@ def main():
         "--ncpus",
         type=int,
         default=4,
-        help="Number of CPU processes to use (default: 8).",
+        help="Number of CPU processes to use (default: 4).",
     )
     parser.add_argument(
         "--n-qso",
@@ -110,8 +110,8 @@ def main():
     parser.add_argument(
         "--fit-niter",
         type=int,
-        default=1,
-        help="number of sigma-rejection iterations during coefficient fitting (default 1; set to 0 for no rejection).",
+        default=3,
+        help="number of sigma-rejection iterations during coefficient fitting (default 3; set to 0 for no rejection).",
     )
 
     parser.add_argument(
@@ -131,7 +131,7 @@ def main():
         "--headers",
         type=str,
         nargs="+",
-        default=None,
+        default=[],
         help="Extra FITS headers to include in KEY=VALUE format.",
     )
 
@@ -163,7 +163,7 @@ def main():
     logger.info("\n==== USER PROVIDED ARGUMENTS ====\n")
     for key, value in vars(args).items():
         logger.info(f"{key}: {value}")
-    print("\n================================\n")
+    logger.info("\n================================\n")
 
     # Determine number/selection of QSOs
     if args.n_qso is None:
