@@ -5,9 +5,7 @@
 #
 # IMPORTANT — override precedence:
 #   Every key present in this file OVERWRITES the corresponding CLI argument,
-#   even if that argument was explicitly provided on the command line.
 #   CLI arguments only take effect for keys that are absent from this file.
-#   To mix both, simply omit a key here and pass it on the command line.
 ################################
 
 spectra_file: /path/to/spectra.fits
