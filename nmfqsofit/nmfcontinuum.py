@@ -125,6 +125,7 @@ class NMFContinuum:
         interp_kind: str,
         fit_niter: int = 3,
         fit_nsigma: float = 3.0,
+        smooth_nsigma: float = 3.0,
     ):
         """
         Initialize NMFContinuum fitter.
@@ -149,6 +150,7 @@ class NMFContinuum:
         self.interp_kind = interp_kind
         self.fit_niter = int(fit_niter)
         self.fit_nsigma = float(fit_nsigma)
+        self.smooth_nsigma = float(smooth_nsigma)
 
         self.delta_lambda = np.nanmedian(self.wave[1:] - self.wave[:-1])
 
@@ -418,7 +420,7 @@ class NMFContinuum:
             return np.nan
         return 1.4826 * float(np.median(np.abs(finite - np.median(finite))))
 
-    def _apply_smooth_correction(self, first_continuum, kernel_large, kernel_small, smoothing_niter, nsigma=0.5):
+    def _apply_smooth_correction(self, first_continuum, kernel_large, kernel_small, smoothing_niter, nsigma=3.0):
 
         """Apply iterative median-filter correction to remove intermediate
         and small scale fluctuations.
@@ -635,7 +637,7 @@ class NMFContinuum:
             first_cont_obs = first_cont_norm * norm
 
             # Smooth correction in observed units (uses self.flux/self.mask which are observed)
-            cont_obs = self._apply_smooth_correction(first_cont_obs, kernel_large=self.kernel_large, kernel_small=self.kernel_small, smoothing_niter=self.smoothing_niter)
+            cont_obs = self._apply_smooth_correction(first_cont_obs, kernel_large=self.kernel_large, kernel_small=self.kernel_small, smoothing_niter=self.smoothing_niter, nsigma=self.smooth_nsigma)
 
             # Chi2 on all valid pixels for both continua
             first_cost = self._chi2_reduced_against_observed(first_cont_obs, n_comp)
@@ -646,6 +648,7 @@ class NMFContinuum:
                 cost = first_cost
                 cont_obs = first_cont_obs.copy()
 
+            # Select the best solution by maximum coverage; break ties by lowest chi2
             if coverage > best["coverage"] or (
                 coverage == best["coverage"] and cost < best["final_cost"]
             ):
@@ -708,7 +711,7 @@ def _process_one(args):
     Returns:
         tuple: (coeff, first_continuum, continuum, first_cost, cost, eigvec_range, norm)
     """
-    wave, flux1, ivar1, z1, eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind, smoothing_niter, fit_niter, fit_nsigma = args
+    wave, flux1, ivar1, z1, eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind, smoothing_niter, fit_niter, fit_nsigma, smooth_nsigma = args
     fitter = NMFContinuum(
         wave=wave,
         flux=flux1,
@@ -723,6 +726,7 @@ def _process_one(args):
         smoothing_niter=smoothing_niter,
         fit_niter=fit_niter,
         fit_nsigma=fit_nsigma,
+        smooth_nsigma=smooth_nsigma,
     )
     fitter.fit()
 
@@ -755,6 +759,7 @@ def run_parallel_continuum(
     smoothing_niter: int = 3,
     fit_niter: int = 3,
     fit_nsigma: float = 3.0,
+    smooth_nsigma: float = 3.0,
 ):
     """
     Fit continua for many QSOs in parallel.
@@ -774,6 +779,7 @@ def run_parallel_continuum(
         smoothing_niter (int): Maximum iteration for median filtering
         fit_niter (int): Number of sigma-rejection iterations during coefficient fitting (default: 3).
         fit_nsigma (float): Sigma threshold for absorption masking during fitting (default: 3.0).
+        smooth_nsigma (float): Sigma threshold for absorption masking during smoothing correction (default: 3.0).
 
     Returns:
         tuple:
@@ -803,7 +809,7 @@ def run_parallel_continuum(
     n_jobs = int(max(1, n_jobs))
 
     tasks = [
-        (wave, flux[i], ivar[i], float(z[i].item()), eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind, smoothing_niter, fit_niter, fit_nsigma)
+        (wave, flux[i], ivar[i], float(z[i].item()), eigenspectra, kernel_large, kernel_small, method, maxiters, interp_kind, smoothing_niter, fit_niter, fit_nsigma, smooth_nsigma)
         for i in range(nqso)
     ]
 

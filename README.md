@@ -97,7 +97,7 @@ nmfqsofit --help
 
 The NMF eigenspectra are maintained in a separate [repository](https://github.com/abhi0395/nmfeigenspectra). This keeps the eigenspectra data independent from the `nmfqsofit` codebase, allowing both to evolve separately. Currently, the repository provides eigenspectra built from **SDSS DR14** and **DESI DR1** quasar spectra only. In the future, eigenspectra from additional surveys (e.g., 4MOST, WEAVE, HST, WAVES) will be added.
 
-Before running `nmfqsofit`, download the eigenspectra repository. It is recommeded to use **tagged** version to ensure reproducibility. 
+Before running `nmfqsofit`, download the eigenspectra repository. It is recommended to use **tagged** version to ensure reproducibility. 
 
 ```bash
 git clone https://github.com/abhi0395/nmfeigenspectra.git
@@ -166,6 +166,7 @@ nmfqsofit \
   --spectra-file data/test_sdss_spectra.fits \
   --eigenspectra /path/to/nmfeigenspectra/sdss \
   --kernel-size 141 \
+  --kernel-small 71 \
   --method nnls \
   --interp-kind linear \
   --ncpus 8 \
@@ -194,12 +195,14 @@ See `config_example.yml` file to see how a parameter config file will look like.
 | `--output` | Required | Output FITS filename |
 | `--method` | Optional | Fitting method: `nnls` (Non-Negative Least Squares) or `nmf` (Non-negative Matrix Factorization); default: `nnls` |
 | `--interp-kind` | Optional | Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.); default: `linear` |
-| `--kernel-size` | Optional | Median filter kernel size for smoothing correction; default: `71` |
+| `--kernel-size` | Optional | Median filter kernel size for intermediate-scale smoothing correction (odd integer); default: `141` |
+| `--kernel-small` | Optional | Median filter kernel size for small-scale smoothing correction (odd integer); default: half of `--kernel-size` rounded up to the nearest odd integer |
 | `--ncpus` | Optional | Number of CPU processes for parallel fitting; default: `4` |
 | `--maxiters` | Optional | Maximum iterations for NMF or NNLS solver; default: `200` |
 | `--smoothing-niter` | Optional | Maximum iterations for median filtering; default: `3` |
 | `--fit-niter` | Optional | Number of iterative sigma-rejection passes during coefficient fitting; default: `3` (set to `0` to disable) |
-| `--fit-nsigma` | Optional | Downward sigma threshold for absorption rejection during fitting; default: `3.0` |
+| `--fit-nsigma` | Optional | Downward sigma threshold for absorption rejection during coefficient fitting; default: `3.0` |
+| `--smooth-nsigma` | Optional | Downward sigma threshold for absorption masking during smoothing correction; default: `3.0` |
 | `--n-qso` | Optional | Number of QSOs to process – integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`) |
 | `--headers` | Optional | Extra FITS header keywords to write (e.g., `AUTHOR=Name SURVEY=Survey`) |
 

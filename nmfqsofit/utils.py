@@ -301,6 +301,7 @@ def _parse_headers(args):
     headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
     headers["SIG_CLIP"] = (float(args.fit_nsigma), 'Sigma clipping  (N * sigma), to mask absorption')
     headers["FIT_ITER"] = (int(args.fit_niter), 'Number of iterations for sigma clipping')
+    headers["SM_SIGMA"] = (float(args.smooth_nsigma), 'Sigma clipping (N * sigma) for smoothing correction')
 
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)

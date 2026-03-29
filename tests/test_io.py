@@ -434,7 +434,6 @@ class TestContinuumSpec(unittest.TestCase):
             spec.read_fits()
 
     def test_verbose_prints_timing(self):
-        import logging
         with self.assertLogs("nmfqsofit.io", level="INFO") as cm:
             spec = ContinuumSpec(self.path, autoload=True, verbose=True)
         self.assertTrue(any("Time taken" in msg for msg in cm.output))

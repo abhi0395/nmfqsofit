@@ -191,6 +191,7 @@ class TestParseHeaders(unittest.TestCase):
         args.smoothing_niter = 3
         args.fit_nsigma = 3
         args.fit_niter = 3
+        args.smooth_nsigma = 3.0
         return args
 
     def test_basic_parse(self):
