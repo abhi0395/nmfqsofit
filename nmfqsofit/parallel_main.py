@@ -36,7 +36,7 @@ def main():
         "--config",
         type=str,
         default=None,
-        help="YAML config file with all arguments. If provided, config values override CLI defaults.",
+        help="YAML config file with all arguments. If provided, values from this file override all command-line arguments (including explicitly provided ones)..",
     )
 
     parser.add_argument(

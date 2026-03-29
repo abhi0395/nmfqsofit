@@ -330,7 +330,7 @@ def load_all_eigenspectra(data_path):
     elapsed_time = time.time() - start_time
     logger.info(
         f"Successfully loaded {files_loaded} eigenspectra file(s) with {len(nmf_dict)} "
-        f"redshift bins. Time took: {elapsed_time:.2f} s"
+        f"redshift bins. Time taken: {elapsed_time:.2f} s"
     )
 
     return nmf_dict

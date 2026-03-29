@@ -19,7 +19,7 @@ from .utils import interpolation1D
 from .logger import get_logger
 
 logger = get_logger(__name__)
-LARGE_CHI2 = 999999.0  #for failure cases
+LARGE_CHI2 = 999999.0  # for failure cases
 
 @dataclass(frozen=True)
 class Eigenset:
@@ -391,7 +391,7 @@ class NMFContinuum:
             logger.debug(f'fit_coeff_iterative iter={ntr}: sigma={sigma:.4f}, n_masked={n_changed}')
 
             if n_changed == 0:
-                logger.info(f'fit_coeff_iterative: converged (no new masked pixels) after iteration {ntr}')
+                logger.debug(f'fit_coeff_iterative: converged (no new masked pixels) after iteration {ntr}')
                 break
 
             coeff, model = self._run_solver(A_interp, flux_fit, ivar_fit, good)
@@ -459,7 +459,10 @@ class NMFContinuum:
 
         cont0 = np.asarray(first_continuum)
 
-        if kernel_large < 0 or kernel_small < 0:
+        if kernel_large is None or kernel_small is None:
+            kernel_large = None
+            kernel_small = None
+        elif kernel_large < 0 or kernel_small < 0:
             kernel_large = None
             kernel_small = None
 
@@ -505,6 +508,9 @@ class NMFContinuum:
             sigma_pre = self._mad_sigma(delta_pre[ok_pre])
             if np.isfinite(sigma_pre) and (sigma_pre > 0.0):
                 good = ok_pre & (delta_pre > -nsigma * sigma_pre)
+
+        if kernel_large is None or kernel_small is None:
+            return cont0 * smooth
 
         for it in range(int(smoothing_niter)):
 
@@ -599,7 +605,7 @@ class NMFContinuum:
             # Coverage: valid pixels within the eigenset's observed-frame wavelength range
             obs_min = eig.rest_wave.min() * (1.0 + self.z)
             obs_max = eig.rest_wave.max() * (1.0 + self.z)
-            mask_coverage = np.isfinite(self.flux) & np.isfinite(self.ivar) & (self.ivar > 0) & (self.wave >= obs_min) & (self.wave <= obs_max)
+            mask_coverage = self.mask & np.isfinite(self.wave) & (self.wave >= obs_min) & (self.wave <= obs_max)
             coverage = int(np.count_nonzero(mask_coverage))
 
             # Skip if norm is not usable
@@ -623,6 +629,7 @@ class NMFContinuum:
                     "z[%.2f, %.2f) lam[%.1f, %.1f] stat=%s; skipping this configuration",
                     self.z, zmin, zmax, lam_min, lam_max, stat
                 )
+                continue
 
             # Scale first-pass continuum back to OBSERVED units
             first_cont_obs = first_cont_norm * norm
@@ -639,7 +646,9 @@ class NMFContinuum:
                 cost = first_cost
                 cont_obs = first_cont_obs.copy()
 
-            if coverage >= best["coverage"]:
+            if coverage > best["coverage"] or (
+                coverage == best["coverage"] and cost < best["final_cost"]
+            ):
                 best.update(
                     {
                         "final_cost": cost,
