@@ -182,6 +182,8 @@ nmfqsofit --config config_example.yml
 ## config.yml file will contain all the user-defined arguments to run the script
 ```
 
+> **Important — override precedence:** when `--config` is provided, **every key in the YAML file overwrites the corresponding CLI argument**, including values you explicitly passed on the command line. CLI arguments only take effect for keys that are *absent* from the config file. To mix both, omit a key from the YAML and pass it on the command line instead.
+
 See `config_example.yml` file to see how a parameter config file will look like.
 
 

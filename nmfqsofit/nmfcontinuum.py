@@ -20,6 +20,7 @@ from .logger import get_logger
 
 logger = get_logger(__name__)
 LARGE_CHI2 = 999999.0  # for failure cases
+MIN_PIXELS_FOR_NORM = 5  # minimum valid pixels required to compute normalization factor
 
 @dataclass(frozen=True)
 class Eigenset:
@@ -65,7 +66,7 @@ def compute_normalization(
         & (ivar > 0.0)
     )
 
-    if int(np.count_nonzero(sel)) < 5:
+    if int(np.count_nonzero(sel)) < MIN_PIXELS_FOR_NORM:
         return np.nan
 
     if stat == "median":

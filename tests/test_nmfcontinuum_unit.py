@@ -440,5 +440,150 @@ class TestRunParallelContinuumValidation(unittest.TestCase):
         self.assertEqual(out["coefficients"].shape[0], 2)
 
 
+# ---------------------------------------------------------------------------
+# Tests for _fit_coeff_iterative
+# ---------------------------------------------------------------------------
+
+class TestFitCoeffIterative(unittest.TestCase):
+    """Tests for iterative sigma-rejection in coefficient fitting."""
+
+    def setUp(self):
+        self.fitter = _make_fitter(n_wave=200, n_comp=3)
+        key = list(self.fitter.eigenspectra_dict.keys())[0]
+        item = self.fitter.eigenspectra_dict[key]
+        eig = Eigenset(
+            rest_wave=np.asarray(item["wave"]),
+            eigvec=np.asarray(item["eigvec"]),
+        )
+        self.A = self.fitter._interpolate_eigvec_to_observed(eig)
+
+    def test_returns_nonneg_coefficients(self):
+        flux_fit = self.fitter.flux / 2.0
+        ivar_fit = self.fitter.ivar
+        mask_fit = self.fitter.mask
+        coeff, model = self.fitter._fit_coeff_iterative(
+            self.A, flux_fit, ivar_fit, mask_fit
+        )
+        self.assertEqual(coeff.shape, (3,))
+        self.assertTrue(np.all(coeff >= 0))
+        self.assertEqual(model.shape, (self.fitter.wave.size,))
+
+    def test_absorption_pixels_masked_do_not_change_emission(self):
+        """Inject a deep absorption trough and verify the fit is not pulled down."""
+        rng = np.random.default_rng(0)
+        n = self.fitter.wave.size
+        flux_clean = np.full(n, 2.0)
+
+        # Build a model from the clean fit first
+        mask_fit = self.fitter.mask.copy()
+        ivar_fit = self.fitter.ivar.copy()
+        coeff_clean, model_clean = self.fitter._fit_coeff_iterative(
+            self.A, flux_clean, ivar_fit, mask_fit
+        )
+
+        # Add a narrow deep absorption trough at the centre
+        flux_abs = flux_clean.copy()
+        mid = n // 2
+        flux_abs[mid - 5 : mid + 5] = 0.0  # strong absorption
+
+        coeff_abs, model_abs = self.fitter._fit_coeff_iterative(
+            self.A, flux_abs, ivar_fit, mask_fit
+        )
+        # Coefficients from the absorption-masked fit should be close to the
+        # clean fit because the absorber pixels are sigma-clipped away.
+        np.testing.assert_allclose(coeff_abs, coeff_clean, rtol=0.5)
+
+    def test_zero_niter_skips_rejection(self):
+        """With fit_niter=0 only the initial fit is run; absorption pixels stay."""
+        self.fitter.fit_niter = 0
+        n = self.fitter.wave.size
+        flux_fit = np.full(n, 2.0)
+        ivar_fit = self.fitter.ivar.copy()
+        mask_fit = self.fitter.mask.copy()
+        coeff, model = self.fitter._fit_coeff_iterative(
+            self.A, flux_fit, ivar_fit, mask_fit
+        )
+        # Should still return valid arrays
+        self.assertEqual(coeff.shape, (3,))
+        self.assertTrue(np.all(np.isfinite(model)))
+
+    def test_all_pixels_masked_raises(self):
+        """If the mask leaves fewer pixels than components, solver must raise."""
+        mask_fit = np.zeros(self.fitter.wave.size, dtype=bool)
+        with self.assertRaises(ValueError):
+            self.fitter._fit_coeff_iterative(
+                self.A, self.fitter.flux, self.fitter.ivar, mask_fit
+            )
+
+    def test_output_model_finite(self):
+        flux_fit = self.fitter.flux / 2.0
+        coeff, model = self.fitter._fit_coeff_iterative(
+            self.A, flux_fit, self.fitter.ivar, self.fitter.mask
+        )
+        self.assertTrue(np.all(np.isfinite(model)))
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for _apply_smooth_correction
+# ---------------------------------------------------------------------------
+
+class TestApplySmoothCorrectionExtra(unittest.TestCase):
+    """Tests for edge cases and behaviour of the smoothing correction."""
+
+    def setUp(self):
+        self.fitter = _make_fitter(n_wave=300, kernel_large=21, kernel_small=11)
+
+    def test_none_kernel_returns_first_continuum_unchanged(self):
+        """Passing None kernels must bypass all smoothing and return cont0 * 1."""
+        first_cont = np.full(300, 3.0)
+        result = self.fitter._apply_smooth_correction(
+            first_cont, kernel_large=None, kernel_small=None, smoothing_niter=3
+        )
+        np.testing.assert_allclose(result, first_cont)
+
+    def test_smoothing_does_not_amplify_continuum(self):
+        """Output should be in a reasonable range relative to the input."""
+        first_cont = np.full(300, 2.0)
+        result = self.fitter._apply_smooth_correction(
+            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=3
+        )
+        # Smooth ratio should be ≈1 when flux ≈ continuum; output ≈ input
+        np.testing.assert_allclose(result, first_cont, rtol=0.5)
+
+    def test_absorption_trough_does_not_pull_continuum_down(self):
+        """With a narrow absorption trough in the flux, the corrected continuum
+        should not be significantly lower than the absorption-free value."""
+        n = 300
+        # Flat flux and continuum at 2.0 everywhere
+        self.fitter.flux = np.full(n, 2.0)
+        self.fitter.ivar = np.ones(n)
+        self.fitter.mask = np.ones(n, dtype=bool)
+
+        first_cont = np.full(n, 2.0)
+
+        # Inject a deep absorption trough into flux
+        mid = n // 2
+        self.fitter.flux[mid - 5 : mid + 5] = 0.1
+
+        result = self.fitter._apply_smooth_correction(
+            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=3
+        )
+        # Outside the trough the continuum should remain close to 2.0
+        outside_trough = np.ones(n, dtype=bool)
+        outside_trough[mid - 15 : mid + 15] = False
+        self.assertTrue(
+            np.all(result[outside_trough] > 1.5),
+            "Smoothing correction pulled the continuum below 1.5 outside the trough",
+        )
+
+    def test_zero_smoothing_niter_returns_first_continuum(self):
+        """With smoothing_niter=0 the loop never runs; smooth stays all-ones."""
+        first_cont = np.full(300, 2.0)
+        result = self.fitter._apply_smooth_correction(
+            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=0
+        )
+        np.testing.assert_allclose(result, first_cont)
+
+
 if __name__ == "__main__":
     unittest.main()
