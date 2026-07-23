@@ -185,7 +185,7 @@ class TestParseHeaders(unittest.TestCase):
         args.headers = headers or []
         args.method = "nnls"
         args.eigenspectra = "/some/path"
-        args.kernel_size = 141
+        args.kernel_large = 141
         args.kernel_small = 71
         args.maxiters = 100
         args.smoothing_niter = 3

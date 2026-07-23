@@ -72,7 +72,7 @@ def main():
         ),
     )
     parser.add_argument(
-        "--kernel-size",
+        "--kernel-large",
         type=int,
         default=141,
         help="Median filter kernel size for intermediate-scale smoothing (odd integer; default: 141).",
@@ -169,7 +169,7 @@ def main():
     logger = setup_logger("nmfqsofit", level=logging.INFO)
 
     if args.kernel_small is None:
-        args.kernel_small = int(args.kernel_size / 2)
+        args.kernel_small = int(args.kernel_large / 2)
         if args.kernel_small % 2 == 0:
             args.kernel_small += 1  # ensure odd
 
@@ -224,7 +224,7 @@ def main():
             ivar=spec.ivar,
             z=z,
             eigenspectra=eigenspectra,
-            kernel_large=args.kernel_size,
+            kernel_large=args.kernel_large,
             kernel_small=args.kernel_small,
             method=args.method,
             n_jobs=n_jobs,

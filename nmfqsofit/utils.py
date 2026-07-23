@@ -239,7 +239,7 @@ def _parse_headers(args):
             - headers (list[str]): List of strings like ["KEY=VALUE", "KEY2=VALUE2"].
             - method (str): Fitting method.
             - eigenspectra (str): Eigenspectra directory.
-            - kernel_size (int): Kernel size.
+            - kernel_large (int): Kernel size.
             - maxiters (int): Maximum iterations.
 
     Returns:
@@ -283,7 +283,7 @@ def _parse_headers(args):
 
     headers["METHOD"] = (str(args.method) , 'Fitting Method')
     headers["EIGENVEC"] = (str(args.eigenspectra), 'Eigenvector (eigenspectra) configuration')
-    headers["KERN_I"] = (int(args.kernel_size), 'kernel size for removing large fluctuation')
+    headers["KERN_I"] = (int(args.kernel_large), 'kernel size for removing large fluctuation')
     headers["KERN_II"] = (int(args.kernel_small), 'kernel size for removing small fluctuation')
 
     # while still validating other invalid values with a clear error.
