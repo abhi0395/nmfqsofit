@@ -177,6 +177,7 @@ class NMFContinuum:
         self.continuum = None         # (nwave,)
         self.first_cost = None
         self.cost = None
+        self.success = None
         self.eigvec_range = None
         self.norm = None
 
@@ -692,6 +693,7 @@ class NMFContinuum:
         self.continuum = best["continuum"]
         self.first_cost = float(best["first_cost"])
         self.cost = float(best["final_cost"])
+        self.success = self.cost != LARGE_CHI2
         self.norm = float(best["norm"])
         self.eigvec_range = f"z_{int(best['zmin']*100):03d}_{int(best['zmax']*100):03d}"
         self.zmin = float(best["zmin"])
@@ -737,6 +739,7 @@ def _process_one(args):
         fitter.continuum,
         fitter.first_cost,
         fitter.cost,
+        fitter.success,
         fitter.eigvec_range,
         fitter.zmin,
         fitter.zmax,
@@ -830,14 +833,16 @@ def run_parallel_continuum(
 
     t1 = time.time()
     logger.info(f"Total continuum computation time for {nqso} QSOs: {t1 - t0:.2f} s")
+    coeff_list, first_cont_list, cont_list, first_cost_list, cost_list, success_list, range_list, zmin_list, zmax_list, norm_list, n_comp_list = zip(*results)
 
-    coeff_list, first_cont_list, cont_list, first_cost_list, cost_list, range_list, zmin_list, zmax_list, norm_list, n_comp_list = zip(*results)
 
     coefficient_matrix = np.vstack(coeff_list).astype(np.float32)
     first_continuum_matrix = np.vstack(first_cont_list).astype(np.float32)
     final_continuum_matrix = np.vstack(cont_list).astype(np.float32)
 
     first_cost = np.asarray(first_cost_list, dtype=np.float32)
+    final_cost = np.asarray(cost_list, dtype=np.float32)
+    success = np.asarray(success_list, dtype=np.bool_)
     final_cost = np.asarray(cost_list, dtype=np.float32)
 
     eigvec_range = np.asarray(range_list, dtype="S12")
@@ -861,5 +866,6 @@ def run_parallel_continuum(
         "zmax":zmaxs,
         "norm_factor":norm_factor,
         "n_comp":n_comp,
-        "method":method_array
+        "method":method_array,
+        "success": success
     }

@@ -100,6 +100,7 @@ class TestNMFContinuum(unittest.TestCase):
         self.assertEqual(out["continuum"].shape, spec.flux.shape)
         self.assertEqual(out["first_cost"].shape, (n_take,))
         self.assertEqual(out["final_cost"].shape, (n_take,))
+        self.assertEqual(out["success"].shape, (n_take,))
         self.assertEqual(out["eigvector_range"].shape, (n_take,))
         self.assertEqual(out["norm_factor"].shape, (n_take,))
         # z and related arrays may include an extra dimension; only length is important
@@ -152,6 +153,7 @@ class TestNMFContinuum(unittest.TestCase):
         self.assertEqual(out["continuum"].shape, spec.flux.shape)
         self.assertEqual(out["first_cost"].shape, (n_take,))
         self.assertEqual(out["final_cost"].shape, (n_take,))
+        self.assertEqual(out["success"].shape, (n_take,))
         self.assertEqual(out["eigvector_range"].shape, (n_take,))
         self.assertEqual(out["norm_factor"].shape, (n_take,))
         # account for possible dimension on z
