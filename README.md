@@ -197,8 +197,8 @@ See `config_example.yml` file to see how a parameter config file will look like.
 | `--output` | Required | Output FITS filename |
 | `--method` | Optional | Fitting method: `nnls` (Non-Negative Least Squares) or `nmf` (Non-negative Matrix Factorization); default: `nnls` |
 | `--interp-kind` | Optional | Eigenvector interpolation method (`linear`, `cubic`, `quadratic`, etc.); default: `linear` |
-| `--kernel-size` | Optional | Median filter kernel size for intermediate-scale smoothing correction (odd integer); default: `141` |
-| `--kernel-small` | Optional | Median filter kernel size for small-scale smoothing correction (odd integer); default: half of `--kernel-size` rounded up to the nearest odd integer |
+| `--kernel-large` | Optional | Median filter kernel size for intermediate-scale smoothing correction (odd integer); default: `141` |
+| `--kernel-small` | Optional | Median filter kernel size for small-scale smoothing correction (odd integer); default: half of `--kernel-large` rounded up to the nearest odd integer |
 | `--ncpus` | Optional | Number of CPU processes for parallel fitting; default: `4` |
 | `--maxiters` | Optional | Maximum iterations for NMF or NNLS solver; default: `200` |
 | `--smoothing-niter` | Optional | Maximum iterations for median filtering; default: `3` |
@@ -222,7 +222,7 @@ The output FITS file contains:
 | COEFFICIENTS | NMF or NNLS coefficients (nspec x ncomp), can be used to construct first continuum |
 | FIRST_CONTINUUM | First reconstructed continuum (before median filtering) |
 | CONTINUUM | Final median-filter corrected continuum |
-| METADATA | Z, FIRST_COST, FINAL_COST, EIGVECTOR_RANGE, ZMIN, ZMAX, NORM_FACTOR, N_COMP |
+| METADATA | Z, FIRST_COST, FINAL_COST, EIGVECTOR_RANGE, ZMIN, ZMAX, NORM_FACTOR, N_COMP, SUCCESS |
 
 ---
 

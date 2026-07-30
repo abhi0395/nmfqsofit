@@ -842,7 +842,7 @@ def run_parallel_continuum(
 
     first_cost = np.asarray(first_cost_list, dtype=np.float32)
     final_cost = np.asarray(cost_list, dtype=np.float32)
-    success = np.asarray(success_list, dtype=np.bool)
+    success = np.asarray(success_list, dtype=np.bool_)
     final_cost = np.asarray(cost_list, dtype=np.float32)
 
     eigvec_range = np.asarray(range_list, dtype="S12")

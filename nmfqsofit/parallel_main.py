@@ -81,7 +81,7 @@ def main():
         "--kernel-small",
         type=int,
         default=71,
-        help="Median filter kernel size for small-scale smoothing (odd integer; default: 71, half of --kernel-size, rounded up to odd).",
+        help="Median filter kernel size for small-scale smoothing (odd integer; default: 71, half of --kernel-large, rounded up to odd).",
     )
     parser.add_argument(
         "--method",
