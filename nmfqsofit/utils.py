@@ -253,12 +253,17 @@ def _parse_headers(args):
 
     from importlib.metadata import version, PackageNotFoundError
     import sys
-    from . import __author__, __repo__  # Import from your __init__.py
+
+    try:
+        from . import __author__ as package_author, __repo__ as package_repo
+    except (ImportError, AttributeError):
+        package_author = None
+        package_repo = None
 
     headers: Dict[str, Any] = {}
     # Always set these keywords in the Primary Header
-    headers['ORIGAUTH'] = (__author__, 'Original author of repo')
-    headers['GITREPO'] = (__repo__, 'Source code repository')
+    headers['ORIGAUTH'] = (package_author or 'Unknown', 'Original author of repo')
+    headers['GITREPO'] = (package_repo or 'https://github.com/abhi0395/nmfqsofit', 'Source code repository')
 
     for item in args.headers:
         if item.count("=") != 1:

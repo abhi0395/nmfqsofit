@@ -230,6 +230,28 @@ class TestParseHeaders(unittest.TestCase):
         self.assertIn("ORIGAUTH", result)
         self.assertIn("GITREPO", result)
 
+    def test_missing_package_metadata_uses_fallbacks(self):
+        import nmfqsofit
+
+        original_author = getattr(nmfqsofit, "__author__", None)
+        original_repo = getattr(nmfqsofit, "__repo__", None)
+
+        try:
+            if hasattr(nmfqsofit, "__author__"):
+                delattr(nmfqsofit, "__author__")
+            if hasattr(nmfqsofit, "__repo__"):
+                delattr(nmfqsofit, "__repo__")
+
+            args = self._make_args()
+            result = _parse_headers(args)
+            self.assertEqual(result["ORIGAUTH"][0], "Unknown")
+            self.assertEqual(result["GITREPO"][0], "https://github.com/abhi0395/nmfqsofit")
+        finally:
+            if original_author is not None:
+                setattr(nmfqsofit, "__author__", original_author)
+            if original_repo is not None:
+                setattr(nmfqsofit, "__repo__", original_repo)
+
 
 # ---------------------------------------------------------------------------
 # Tests for plot_flux_and_continuum
