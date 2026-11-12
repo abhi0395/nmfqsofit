@@ -649,7 +649,7 @@ class NMFContinuum:
 
             # Chi2 on all valid pixels for both continua
             first_cost = self._chi2_reduced_against_observed(first_cont_obs, n_comp, mask_pixels=mask_coverage)
-            cost = self._chi2_reduced_against_observed(cont_obs, n_comp, mask_pixels=mask_coverage))
+            cost = self._chi2_reduced_against_observed(cont_obs, n_comp, mask_pixels=mask_coverage)
 
             # Keep smooth-corrected continuum only if it improves chi2
             if cost > first_cost:
