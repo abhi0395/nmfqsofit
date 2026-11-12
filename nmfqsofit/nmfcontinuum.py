@@ -269,7 +269,7 @@ class NMFContinuum:
 
         return out
 
-    def _chi2_reduced_against_observed(self, model_obs: np.ndarray, n_comp: int) -> float:
+    def _chi2_reduced_against_observed(self, model_obs: np.ndarray, n_comp: int, mask_pixels: None) -> float:
         """
         Reduced chi^2 computed against the observed spectrum using all valid pixels.
 
@@ -280,6 +280,8 @@ class NMFContinuum:
             float: Reduced chi^2 value.
         """
         good = self.mask & np.isfinite(model_obs)
+        if mask_pixels is not None:
+            good&=mask_pixels
         n = int(np.count_nonzero(good)) - n_comp  #degrees of freedome
         if n <= 0:
             return np.inf
@@ -422,7 +424,7 @@ class NMFContinuum:
             return np.nan
         return 1.4826 * float(np.median(np.abs(finite - np.median(finite))))
 
-    def _apply_smooth_correction(self, first_continuum, kernel_large, kernel_small, smoothing_niter, nsigma=3.0):
+    def _apply_smooth_correction(self, first_continuum, kernel_large, kernel_small, smoothing_niter, nsigma=3.0, mask_pixels=None):
 
         """Apply iterative median-filter correction to remove intermediate
         and small scale fluctuations.
@@ -456,6 +458,7 @@ class NMFContinuum:
                 Must be odd.
             nsigma (float): Sigma threshold for masking narrow absorption features.
             smoothing_niter (int): Number of iterationsfor median filtering.
+            mask_pixels (array): Boolean array with details on which pixels are masked
 
         Returns:
             np.ndarray: Final continuum array (nwave,).
@@ -486,6 +489,9 @@ class NMFContinuum:
             & np.isfinite(cont0)
             & (cont0 > 0.0)
         )
+        
+        if mask_pixels is not None:
+            good0&=mask_pixels
 
         # Ratio in observed frame
         ratio = np.full_like(cont0, np.nan, dtype=float)
@@ -622,7 +628,7 @@ class NMFContinuum:
             # Build normalized spectrum for fitting
             flux_fit = flux_obs / norm
             ivar_fit = ivar_obs * (norm ** 2)
-            mask_fit = np.isfinite(flux_fit) & np.isfinite(ivar_fit) & (ivar_fit > 0)
+            mask_fit = np.isfinite(flux_fit) & np.isfinite(ivar_fit) & (ivar_fit > 0) & (mask_coverage)
 
             # Fit coefficients in normalized space (with iterative absorption rejection)
             try:
@@ -639,11 +645,11 @@ class NMFContinuum:
             first_cont_obs = first_cont_norm * norm
 
             # Smooth correction in observed units (uses self.flux/self.mask which are observed)
-            cont_obs = self._apply_smooth_correction(first_cont_obs, kernel_large=self.kernel_large, kernel_small=self.kernel_small, smoothing_niter=self.smoothing_niter, nsigma=self.smooth_nsigma)
+            cont_obs = self._apply_smooth_correction(first_cont_obs, kernel_large=self.kernel_large, kernel_small=self.kernel_small, smoothing_niter=self.smoothing_niter, nsigma=self.smooth_nsigma, mask_pixels=mask_coverage)
 
             # Chi2 on all valid pixels for both continua
-            first_cost = self._chi2_reduced_against_observed(first_cont_obs, n_comp)
-            cost = self._chi2_reduced_against_observed(cont_obs, n_comp)
+            first_cost = self._chi2_reduced_against_observed(first_cont_obs, n_comp, mask_pixels=mask_coverage)
+            cost = self._chi2_reduced_against_observed(cont_obs, n_comp, mask_pixels=mask_coverage))
 
             # Keep smooth-corrected continuum only if it improves chi2
             if cost > first_cost:
