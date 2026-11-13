@@ -269,7 +269,7 @@ class NMFContinuum:
 
         return out
 
-    def _chi2_reduced_against_observed(self, model_obs: np.ndarray, n_comp: int, mask_pixels: None) -> float:
+    def _chi2_reduced_against_observed(self, model_obs: np.ndarray, n_comp: int, mask_pixels: np.ndarray | None = None) -> float:
         """
         Reduced chi^2 computed against the observed spectrum using all valid pixels.
 
