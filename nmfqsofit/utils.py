@@ -36,6 +36,12 @@ def elapsed(start, msg, use_logger=False):
     return end
 
 
+def float_or_none(value):
+    if value.lower() == "none":
+        return None
+    return float(value)
+
+
 def parse_qso_sequence(qso_sequence):
     """
     Parse a bash-like sequence or a single integer to generate QSO indices.
