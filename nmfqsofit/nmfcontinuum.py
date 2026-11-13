@@ -281,7 +281,6 @@ class NMFContinuum:
         """
         good = self.mask & np.isfinite(model_obs)
         if mask_pixels is not None:
-            logger.info('In this new mask pixels loop....')
             good&=mask_pixels
         n = int(np.count_nonzero(good)) - n_comp  #degrees of freedome
         if n <= 0:
