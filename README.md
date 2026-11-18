@@ -204,7 +204,7 @@ See `config_example.yml` file to see how a parameter config file will look like.
 | `--smoothing-niter` | Optional | Maximum iterations for median filtering; default: `3` |
 | `--fit-niter` | Optional | Number of iterative sigma-rejection passes during coefficient fitting; default: `3` (set to `0` to disable) |
 | `--fit-nsigma` | Optional | Downward sigma threshold for absorption rejection during coefficient fitting; default: `3.0` |
-| `--smooth-nsigma` | Optional | Downward sigma threshold for absorption masking during smoothing correction; default: `3.0` |
+| `--smooth-nsigma` | Optional | Downward sigma threshold for absorption masking during smoothing correction; default: `1.5` |
 | `--n-qso` | Optional | Number of QSOs to process – integer (`100`), range (`1-1000`), or stepped range (`1-1000:10`) |
 | `--headers` | Optional | Extra FITS header keywords to write (e.g., `AUTHOR=Name SURVEY=Survey`) |
 
