@@ -36,6 +36,12 @@ def elapsed(start, msg, use_logger=False):
     return end
 
 
+def float_or_none(value):
+    if value.lower() == "none":
+        return None
+    return float(value)
+
+
 def parse_qso_sequence(qso_sequence):
     """
     Parse a bash-like sequence or a single integer to generate QSO indices.
@@ -304,9 +310,9 @@ def _parse_headers(args):
 
     headers["MAXITER"] = (maxiters_value, 'Maximum iteration for solver fitting')
     headers["FILT_ITR"] = (int(args.smoothing_niter), 'Number of iterations for median filtering')
-    headers["SIG_CLIP"] = (float(args.fit_nsigma), 'Sigma clipping  (N * sigma), to mask absorption')
+    headers["SIG_CLIP"] = (float(args.fit_nsigma) if args.fit_nsigma is not None else -1.0, "sig-clipping for absorption mask; -1: disabled") 
     headers["FIT_ITER"] = (int(args.fit_niter), 'Number of iterations for sigma clipping')
-    headers["SM_SIGMA"] = (float(args.smooth_nsigma), 'Sigma clipping (N * sigma) for smoothing correction')
+    headers["SM_SIGMA"] = (float(args.smooth_nsigma) if args.smooth_nsigma is not None else -1.0, "sig-clipping for smoothing; -1: disabled")
 
     for k, (pkg, ver) in enumerate(versions.items()):
         headers[f"DEPNAM{k:02d}"] = str(pkg)

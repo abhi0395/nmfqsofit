@@ -21,7 +21,7 @@ maxiters: 200
 interp_kind: linear
 fit_niter: 3       # sigma-rejection iterations during coefficient fitting (0 = no rejection)
 fit_nsigma: 3.0    # sigma threshold for absorption masking during coefficient fitting
-smooth_nsigma: 3.0 # sigma threshold for absorption masking during smoothing correction
+smooth_nsigma: 1.5 # sigma threshold for absorption masking during smoothing correction
 kernel_small: null # small-scale median filter kernel (null = auto: half of kernel_size, rounded up to odd)
 
 # Optional headers as list

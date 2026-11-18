@@ -9,7 +9,7 @@ import numpy as np
 
 from .io import QSOSpecRead, load_all_eigenspectra, write_continuum
 from .nmfcontinuum import run_parallel_continuum
-from .utils import read_nqso_from_header, parse_qso_sequence, _parse_headers
+from .utils import read_nqso_from_header, parse_qso_sequence, _parse_headers, float_or_none
 from .logger import setup_logger
 
 def main():
@@ -122,16 +122,16 @@ def main():
 
     parser.add_argument(
         "--fit-nsigma",
-        type=float,
+        type=float_or_none,
         default=3.0,
-        help="sigma threshold for absorption masking during coefficient fitting (default 3.0)",
+        help="sigma threshold for absorption masking during coefficient fitting, use None to disable (default 3.0)",
     )
 
     parser.add_argument(
         "--smooth-nsigma",
-        type=float,
+        type=float_or_none,
         default=1.5,
-        help="sigma threshold for absorption masking during smoothing correction (default 1.5)",
+        help="sigma threshold for absorption masking during smoothing correction, use None to disable (default 1.5)",
     )
 
     parser.add_argument(
