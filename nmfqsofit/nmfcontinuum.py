@@ -800,8 +800,8 @@ def run_parallel_continuum(
     interp_kind: str = "linear",
     smoothing_niter: int = 3,
     fit_niter: int = 3,
-    fit_nsigma: float = 3.0,
-    smooth_nsigma: float = 1.5,
+    fit_nsigma: float | None = 3.0,
+    smooth_nsigma: float| None = 1.5,
 ):
     """
     Fit continua for many QSOs in parallel.
