@@ -52,6 +52,9 @@ def _make_fitter(z=1.0, n_wave=200, n_comp=3,
         maxiters=50,
         smoothing_niter=2,
         interp_kind="linear",
+        fit_niter=3,
+        fit_nsigma=3.0,
+        smooth_nsigma=1.5,
     )
     return fitter
 
@@ -118,6 +121,9 @@ class TestNMFContinuumInit(unittest.TestCase):
                 maxiters=50,
                 smoothing_niter=2,
                 interp_kind="linear",
+                fit_niter=3,
+                fit_nsigma=3.0,
+                smooth_nsigma=1.5
             )
 
     def test_even_kernel_raises(self):
@@ -135,6 +141,9 @@ class TestNMFContinuumInit(unittest.TestCase):
                 maxiters=50,
                 smoothing_niter=2,
                 interp_kind="linear",
+                fit_niter=3,
+                fit_nsigma=3.0,
+                smooth_nsigma=1.5
             )
 
     def test_none_kernel_accepted(self):
@@ -151,6 +160,9 @@ class TestNMFContinuumInit(unittest.TestCase):
             maxiters=50,
             smoothing_niter=2,
             interp_kind="linear",
+            fit_niter=3,
+            fit_nsigma=3.0,
+            smooth_nsigma=1.5
         )
         self.assertIsNone(fitter.kernel_large)
 
@@ -282,14 +294,14 @@ class TestApplySmoothCorrection(unittest.TestCase):
     def test_returns_array_same_shape(self):
         first_cont = np.full(200, 2.0)
         result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=11, kernel_small=5, smoothing_niter=2
+            first_cont, kernel_large=11, kernel_small=5, smoothing_niter=2, nsigma=3.0, mask_pixels=None
         )
         self.assertEqual(result.shape, first_cont.shape)
 
     def test_negative_kernel_skips_smoothing(self):
         first_cont = np.full(200, 2.0)
         result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=-1, kernel_small=-1, smoothing_niter=2
+            first_cont, kernel_large=-1, kernel_small=-1, smoothing_niter=2, nsigma=3.0, mask_pixels=None
         )
         # With None kernels the smooth ratio stays 1 - result == first_cont
         np.testing.assert_allclose(result, first_cont)
@@ -298,13 +310,13 @@ class TestApplySmoothCorrection(unittest.TestCase):
         first_cont = np.full(200, 2.0)
         with self.assertRaises(ValueError):
             self.fitter._apply_smooth_correction(
-                first_cont, kernel_large=10, kernel_small=5, smoothing_niter=1
+                first_cont, kernel_large=10, kernel_small=5, smoothing_niter=1, nsigma=3.0, mask_pixels=None
             )
 
     def test_output_finite_when_input_finite(self):
         first_cont = np.full(200, 2.0)
         result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=11, kernel_small=5, smoothing_niter=3
+            first_cont, kernel_large=11, kernel_small=5, smoothing_niter=3, nsigma=3.0, mask_pixels=None
         )
         self.assertTrue(np.all(np.isfinite(result)))
 
@@ -537,7 +549,7 @@ class TestApplySmoothCorrectionExtra(unittest.TestCase):
         """Passing None kernels must bypass all smoothing and return cont0 * 1."""
         first_cont = np.full(300, 3.0)
         result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=None, kernel_small=None, smoothing_niter=3
+            first_cont, kernel_large=None, kernel_small=None, smoothing_niter=3, nsigma=3.0, mask_pixels=None
         )
         np.testing.assert_allclose(result, first_cont)
 
@@ -545,7 +557,7 @@ class TestApplySmoothCorrectionExtra(unittest.TestCase):
         """Output should be in a reasonable range relative to the input."""
         first_cont = np.full(300, 2.0)
         result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=3
+            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=3, nsigma=3.0, mask_pixels=None
         )
         # Smooth ratio should be ≈1 when flux ≈ continuum; output ≈ input
         np.testing.assert_allclose(result, first_cont, rtol=0.5)
@@ -566,7 +578,7 @@ class TestApplySmoothCorrectionExtra(unittest.TestCase):
         self.fitter.flux[mid - 5 : mid + 5] = 0.1
 
         result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=3
+            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=3, nsigma=3.0, mask_pixels=None
         )
         # Outside the trough the continuum should remain close to 2.0
         outside_trough = np.ones(n, dtype=bool)
@@ -580,7 +592,7 @@ class TestApplySmoothCorrectionExtra(unittest.TestCase):
         """With smoothing_niter=0 the loop never runs; smooth stays all-ones."""
         first_cont = np.full(300, 2.0)
         result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=0
+            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=0, nsigma=3.0, mask_pixels=None
         )
         np.testing.assert_allclose(result, first_cont)
 
