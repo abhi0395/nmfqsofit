@@ -1,7 +1,9 @@
 """Unit tests for nmfqsofit/nmfcontinuum.py (no network / no eigenspectra repo needed)"""
 
 import unittest
+from unittest.mock import patch
 import numpy as np
+from scipy.signal import medfilt
 
 from nmfqsofit.nmfcontinuum import (
     compute_normalization,
@@ -589,12 +591,28 @@ class TestApplySmoothCorrectionExtra(unittest.TestCase):
         )
 
     def test_zero_smoothing_niter_returns_first_continuum(self):
-        """With smoothing_niter=0 the loop never runs; smooth stays all-ones."""
+        """With sigma clipping enabled, zero iterations skip all filtering."""
         first_cont = np.full(300, 2.0)
-        result = self.fitter._apply_smooth_correction(
-            first_cont, kernel_large=21, kernel_small=11, smoothing_niter=0, nsigma=3.0, mask_pixels=None
-        )
+        with patch("nmfqsofit.nmfcontinuum.medfilt", wraps=medfilt) as medfilt_mock:
+            result = self.fitter._apply_smooth_correction(
+                first_cont, kernel_large=21, kernel_small=11, smoothing_niter=0, nsigma=3.0, mask_pixels=None
+            )
+
         np.testing.assert_allclose(result, first_cont)
+        medfilt_mock.assert_not_called()
+
+    def test_no_sigma_clipping_runs_one_complete_pass_at_zero_iterations(self):
+        """Without sigma clipping, zero iterations still applies both kernels once."""
+        first_cont = np.full(300, 2.0)
+        with patch("nmfqsofit.nmfcontinuum.medfilt", wraps=medfilt) as medfilt_mock:
+            self.fitter._apply_smooth_correction(
+                first_cont, kernel_large=21, kernel_small=11, smoothing_niter=0, nsigma=None, mask_pixels=None
+            )
+
+        self.assertEqual(
+            [call.kwargs["kernel_size"] for call in medfilt_mock.call_args_list],
+            [21, 11],
+        )
 
 
 if __name__ == "__main__":

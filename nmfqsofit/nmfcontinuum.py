@@ -49,7 +49,7 @@ def compute_normalization(
         ivar (np.ndarray): Observed inverse variance array (nwave,).
         lam_min_obs (float): Observed-frame lower bound of normalization window (Angstrom).
         lam_max_obs (float): Observed-frame upper bound of normalization window (Angstrom).
-        stat (str): "median" or "mean".
+        stat (str): "median" or "mean" (default: "median").
 
     Returns:
         float: Normalization factor. If insufficient valid pixels, returns np.nan.
@@ -99,7 +99,8 @@ class NMFContinuum:
         kernel_large (int): Median filter kernel size (odd; enforced).
         method (str): 'nnls' or 'nmf'.
         maxiters (int): Maximum iterations for solver (None means default).
-        interp_kind (str): Interpolation method for eigenspectra ('linear' or 'nearest'; default: 'linear').
+        interp_kind (str): Interpolation method for eigenspectra ('linear' or 'nearest');
+            required by the constructor.
 
     Outputs:
         coeff (np.ndarray): best-fit coefficients (ncomp,).
@@ -124,9 +125,9 @@ class NMFContinuum:
         maxiters: int,
         smoothing_niter: int,
         interp_kind: str,
-        fit_niter: int,
-        fit_nsigma: float,
-        smooth_nsigma: float
+        fit_niter: int = 3,
+        fit_nsigma: float | None = 3.0,
+        smooth_nsigma: float | None = 1.5,
     ):
         """
         Initialize NMFContinuum fitter.
@@ -139,12 +140,15 @@ class NMFContinuum:
             eigenspectra (dict): Eigenspectra dictionary with keys (zmin, zmax, lam_min, lam_max, stat).
             kernel_large (int): Median filter kernel size (odd).
             method (str): 'nnls' or 'nmf'.
-            maxiters (int, optional): Maximum iterations for solver.
+            maxiters (int): Maximum iterations for solver; required by the constructor.
             smoothing_niter (int): Maximum iterations for median filtering.
             interp_kind (str): Interpolation kind: (scip.interpolate)
-            fit_niter (int): Number of iterations for NMF fitting with absorption masking
-            fit_nsigma (float): sigma clipping value for absorption masking
-            smooth_nsigma (float): sigma clipping for smoothing step
+            fit_niter (int): Number of iterations for NMF fitting with absorption
+                masking (default: 3).
+            fit_nsigma (float | None): Sigma-clipping threshold for absorption
+                masking (default: 3.0; None disables sigma clipping).
+            smooth_nsigma (float | None): Sigma-clipping threshold for smoothing
+                (default: 1.5; None disables sigma clipping).
         """
         self.wave = np.asarray(wave)
         self.flux = np.asarray(flux)
@@ -278,6 +282,8 @@ class NMFContinuum:
 
         Args:
             model_obs (np.ndarray): Model flux in observed units (nwave,).
+            mask_pixels (np.ndarray | None): Optional pixel mask; defaults to None,
+                meaning all otherwise-valid pixels are included.
 
         Returns:
             float: Reduced chi^2 value.
@@ -378,7 +384,7 @@ class NMFContinuum:
         """
         good = mask_fit.copy()
         coeff, model = self._run_solver(A_interp, flux_fit, ivar_fit, good)
-        
+
         if self.fit_nsigma is None:
             return coeff, model
 
@@ -435,16 +441,14 @@ class NMFContinuum:
         """Apply iterative median-filter correction to remove intermediate
         and small scale fluctuations.
 
-        This implements the idea described in Zhu (e.g., Zhu & Ménard 2013/2016):
-        0) Pre-masking: apply a single coarse median filter (kernel_large) to the
-            raw ratio to identify and mask absorption dips before the main loop,
-            so that even the first iteration does not feed absorber pixels into medfilt.
-        1) Construct the ratio r = flux / first_continuum.
-        2) Smooth r with an intermediate-scale median filter (kernel_large).
-        3) Remove smaller-scale power with an additional median filter (kernel_small).
-        4) Mask pixels likely affected by narrow absorption by keeping only
-            fluctuations within nsigma * sigma of the smoothed ratio.
-        5) Repeat steps (2)-(4) niter times.
+        A complete smoothing pass applies both median filters: first kernel_large,
+        then kernel_small. When nsigma is None, exactly one complete pass is
+        applied for any nonnegative smoothing_niter. Otherwise, a coarse
+        kernel_large pre-masking pass is followed by up to smoothing_niter
+        complete passes, with absorption masking between passes.
+
+        A negative smoothing_niter disables smoothing. With nsigma set,
+        smoothing_niter=0 also skips the pre-masking and smoothing passes.
 
         The output is a multiplicative correction applied to the first-pass continuum:
             continuum_final = first_continuum * smooth_ratio
@@ -462,8 +466,12 @@ class NMFContinuum:
                 Must be odd.
             kernel_small (int): Median-filter kernel size for small scales.
                 Must be odd.
-            nsigma (float): Sigma threshold for masking narrow absorption features.
-            smoothing_niter (int): Number of iterations for median filtering.
+            nsigma (float | None): Sigma threshold for masking narrow absorption
+                features. If None, one complete smoothing pass is applied without
+                sigma clipping.
+            smoothing_niter (int): Maximum number of complete smoothing passes
+                when nsigma is set. For nsigma=None, any nonnegative value results
+                in one complete pass; a negative value disables smoothing.
             mask_pixels (array): Boolean array with details on which pixels are masked
 
         Returns:
@@ -495,7 +503,7 @@ class NMFContinuum:
             & np.isfinite(cont0)
             & (cont0 > 0.0)
         )
-        
+
         if mask_pixels is not None:
             good0&=mask_pixels
 
@@ -505,8 +513,9 @@ class NMFContinuum:
 
         good = good0.copy()
 
-        if kernel_large is None or kernel_small is None:
-            return cont0 
+        niter = int(smoothing_niter)
+        if kernel_large is None or kernel_small is None or niter < 0:
+            return cont0
 
         if nsigma is None:
             r_fill = self._neutral_fill(ratio)
@@ -521,6 +530,9 @@ class NMFContinuum:
             r2[r2 <= 0.0] = 1.0
 
             return cont0 * r1 * r2
+
+        if niter == 0:
+            return cont0
 
         # Pre-masking: run a single coarse median filter pass on the raw ratio
         # to identify absorption dips before the iterative loop begins.
@@ -542,8 +554,7 @@ class NMFContinuum:
             if np.isfinite(sigma_pre) and (sigma_pre > 0.0) and (nsigma is not None):
                 good = ok_pre & (delta_pre > -nsigma * sigma_pre)
 
-
-        for it in range(int(smoothing_niter)):
+        for it in range(niter):
 
             prev_good = good.copy()
 
@@ -807,10 +818,10 @@ def run_parallel_continuum(
         n_jobs (int): Number of parallel jobs (-1 for all CPUs; default: -1).
         maxiters (int): Maximum iterations for solver (default: 100).
         interp_kind (str): Interpolation method for eigenspectra ('linear' or 'nearest'; default: 'linear').
-        smoothing_niter (int): Maximum iteration for median filtering
+        smoothing_niter (int): Maximum number of median-filtering iterations (default: 3).
         fit_niter (int): Number of sigma-rejection iterations during coefficient fitting (default: 3).
         fit_nsigma (float): Sigma threshold for absorption masking during fitting (default: 3.0).
-        smooth_nsigma (float): Sigma threshold for absorption masking during smoothing correction (default: 3.0).
+        smooth_nsigma (float): Sigma threshold for absorption masking during smoothing correction (default: 1.5).
 
     Returns:
         tuple:
